@@ -28,11 +28,14 @@ module GHC.Hs.Extension where
 import GhcPrelude
 
 import Data.Data hiding ( Fixity )
+import Data.Semigroup
 import GHC.Types.Name
 import GHC.Types.Name.Reader
 import GHC.Types.Var
-import Outputable
-import GHC.Types.SrcLoc (Located)
+import Outputable hiding ((<>))
+import GHC.Types.SrcLoc (Located, GenLocated(..), RealLocated, SrcSpan, noSrcSpan)
+import Lexer (AddApiAnn)
+import ApiAnnotation
 
 import Data.Kind
 
@@ -222,6 +225,103 @@ instance Typeable p => Data (GhcPass p) where
   gunfold _ _ _ = panic "instance Data GhcPass"
   toConstr  _   = panic "instance Data GhcPass"
   dataTypeOf _  = panic "instance Data GhcPass"
+
+-- | The API Annotations are now kept in the HsSyn AST for the GhcPs
+--   phase. We do not always have API Annotations though, only for
+--   parsed code. This type captures that, and allows the
+--   representation decision to be easily revisited as it evolves.
+data ApiAnn' ann
+  = ApiAnn { anns     :: ann -- ^ Annotations added by the Parser
+           , comments :: [RealLocated AnnotationComment]
+              -- ^ Comments enclosed in the SrcSpan of the element
+              -- this `ApiAnn'` is attached to
+           }
+  | ApiAnnNotUsed -- ^ No Annotation for generated code,
+                                 -- e.g. from TH, deriving, etc.
+        deriving (Data, Eq)
+
+type ApiAnn = ApiAnn' [AddApiAnn]
+type ApiAnnComments = [RealLocated AnnotationComment]
+
+data NoApiAnns = NoApiAnns
+  deriving (Data,Eq,Ord)
+
+type ApiAnnCO = ApiAnn' NoApiAnns -- ^ Api Annotations for comments only
+
+noComments ::ApiAnnCO
+noComments = ApiAnn NoApiAnns []
+
+comment :: ApiAnnComments -> ApiAnnCO
+comment cs = ApiAnn NoApiAnns cs
+
+type LocatedA = GenLocated SrcSpanAnn
+
+data SrcSpanAnn = SrcSpanAnn { ann :: ApiAnn, locA :: SrcSpan }
+        deriving (Data, Eq)
+
+instance Outputable SrcSpanAnn where
+  ppr (SrcSpanAnn a l) = text "SrcSpanAnn" <+> ppr a <+> ppr l
+
+-- ---------------------------------------------------------------------
+-- Managing annotations for lists
+-- ---------------------------------------------------------------------
+
+data AnnList
+  = AnnList {
+      alOpenLoc      :: SrcSpan,
+      alOpenKeyword  :: AnnKeywordId,
+      alCloseLoc     :: SrcSpan,
+      alCloseKeyword :: AnnKeywordId
+      } deriving (Data)
+
+-- ---------------------------------------------------------------------
+
+reAnn :: [AddApiAnn] -> ApiAnnComments -> Located a -> LocatedA a
+reAnn anns cs (L l a) = L (SrcSpanAnn (ApiAnn anns cs) l) a
+
+noLocA :: a -> LocatedA a
+noLocA = L (SrcSpanAnn ApiAnnNotUsed noSrcSpan)
+
+getLocA :: LocatedA a -> SrcSpan
+getLocA (L (SrcSpanAnn _ l) _) = l
+
+getLocAnn :: Located a  -> SrcSpanAnn
+getLocAnn (L l _) = SrcSpanAnn ApiAnnNotUsed l
+
+noAnnSrcSpan :: SrcSpan -> SrcSpanAnn
+noAnnSrcSpan l = SrcSpanAnn ApiAnnNotUsed l
+
+noSrcSpanA :: SrcSpanAnn
+noSrcSpanA = noAnnSrcSpan noSrcSpan
+
+reLoc :: LocatedA a -> Located a
+reLoc (L (SrcSpanAnn _ l) a) = L l a
+
+reLocA :: Located a -> LocatedA a
+reLocA (L l a) = (L (SrcSpanAnn ApiAnnNotUsed l) a)
+
+noAnn :: ApiAnn' a
+noAnn = ApiAnnNotUsed
+
+addAnns :: ApiAnn -> [AddApiAnn] -> ApiAnnComments -> ApiAnn
+addAnns (ApiAnn as1 cs) as2 cs2 = ApiAnn (as1 ++ as2) (cs ++ cs2)
+addAnns ApiAnnNotUsed [] [] = ApiAnnNotUsed
+addAnns ApiAnnNotUsed as cs = ApiAnn as cs
+
+
+instance (Semigroup a) => Semigroup (ApiAnn' a) where
+  ApiAnnNotUsed <> x = x
+  x <> ApiAnnNotUsed = x
+  (ApiAnn a1 b1) <> (ApiAnn a2 b2) = ApiAnn (a1 <> a2) (b1 <> b2)
+
+instance (Monoid a) => Monoid (ApiAnn' a) where
+  mempty = ApiAnnNotUsed
+
+
+instance (Outputable a) => Outputable (ApiAnn' a) where
+  ppr (ApiAnn a c)  = text "ApiAnn" <+> ppr a <+> ppr c
+  ppr ApiAnnNotUsed = text "ApiAnnNotUsed"
+
 
 data Pass = Parsed | Renamed | Typechecked
          deriving (Data)
@@ -432,7 +532,10 @@ type family XXDerivDecl      x
 
 -- -------------------------------------
 -- DerivStrategy type family
-type family XViaStrategy x
+type family XStockStrategy    x
+type family XAnyClassStrategy x
+type family XNewtypeStrategy  x
+type family XViaStrategy      x
 
 -- -------------------------------------
 -- DefaultDecl type families
@@ -480,6 +583,11 @@ type family XXAnnDecl      x
 -- RoleAnnotDecl type families
 type family XCRoleAnnotDecl  x
 type family XXRoleAnnotDecl  x
+
+-- -------------------------------------
+-- InjectivityAnn type families
+type family XCInjectivityAnn  x
+type family XXInjectivityAnn  x
 
 -- =====================================================================
 -- Type families for the HsExpr extension points
@@ -661,7 +769,8 @@ type family XBangPat   x
 type family XListPat   x
 type family XTuplePat  x
 type family XSumPat    x
-type family XConPat    x
+type family XConPatIn  x
+type family XConPatOut x
 type family XViewPat   x
 type family XSplicePat x
 type family XLitPat    x
@@ -746,9 +855,6 @@ type family XIEGroup           x
 type family XIEDoc             x
 type family XIEDocNamed        x
 type family XXIE               x
-
--- -------------------------------------
-
 
 -- =====================================================================
 -- End of Type family definitions

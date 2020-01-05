@@ -162,7 +162,7 @@ checking until step (3).
 ************************************************************************
 -}
 
-funsSigCtxt :: [Located Name] -> UserTypeCtxt
+funsSigCtxt :: [LocatedA Name] -> UserTypeCtxt
 -- Returns FunSigCtxt, with no redundant-context-reporting,
 -- form a list of located names
 funsSigCtxt (L _ name1 : _) = FunSigCtxt name1 False
@@ -194,7 +194,7 @@ tcHsSigWcType :: UserTypeCtxt -> LHsSigWcType GhcRn -> TcM Type
 -- already checked this, so we can simply ignore it.
 tcHsSigWcType ctxt sig_ty = tcHsSigType ctxt (dropWildCards sig_ty)
 
-kcClassSigType :: SkolemInfo -> [Located Name] -> LHsSigType GhcRn -> TcM ()
+kcClassSigType :: SkolemInfo -> [LocatedA Name] -> LHsSigType GhcRn -> TcM ()
 -- This is a special form of tcClassSigType that is used during the
 -- kind-checking phase to infer the kind of class variables. Cf. tc_hs_sig_type.
 -- Importantly, this does *not* kind-generalize. Consider
@@ -220,7 +220,7 @@ kcClassSigType skol_info names (HsIB { hsib_ext  = sig_vars
                                   tc_lvl wanted }
 kcClassSigType _ _ (XHsImplicitBndrs nec) = noExtCon nec
 
-tcClassSigType :: SkolemInfo -> [Located Name] -> LHsSigType GhcRn -> TcM Type
+tcClassSigType :: SkolemInfo -> [LocatedA Name] -> LHsSigType GhcRn -> TcM Type
 -- Does not do validity checking
 tcClassSigType skol_info names sig_ty
   = addSigCtxt (funsSigCtxt names) (hsSigType sig_ty) $
@@ -372,9 +372,12 @@ tcDerivStrategy mb_lds
   where
     tc_deriv_strategy :: DerivStrategy GhcRn
                       -> TcM (DerivStrategy GhcTc, [TyVar])
-    tc_deriv_strategy StockStrategy    = boring_case StockStrategy
-    tc_deriv_strategy AnyclassStrategy = boring_case AnyclassStrategy
-    tc_deriv_strategy NewtypeStrategy  = boring_case NewtypeStrategy
+    tc_deriv_strategy (StockStrategy    _)
+                                     = boring_case (StockStrategy noExtField)
+    tc_deriv_strategy (AnyclassStrategy _)
+                                     = boring_case (AnyclassStrategy noExtField)
+    tc_deriv_strategy (NewtypeStrategy  _)
+                                     = boring_case (NewtypeStrategy noExtField)
     tc_deriv_strategy (ViaStrategy ty) = do
       ty' <- checkNoErrs $ tcTopLHsType typeLevelMode ty AnyKind
       let (via_tvs, via_pred) = splitForAllTys ty'
@@ -881,12 +884,12 @@ tc_fun_type mode ty1 ty2 exp_kind = case mode_level mode of
        ; res_k <- newOpenTypeKind
        ; ty1' <- tc_lhs_type mode ty1 arg_k
        ; ty2' <- tc_lhs_type mode ty2 res_k
-       ; checkExpectedKind (HsFunTy noExtField ty1 ty2) (mkVisFunTy ty1' ty2')
+       ; checkExpectedKind (HsFunTy noAnn ty1 ty2) (mkVisFunTy ty1' ty2')
                            liftedTypeKind exp_kind }
   KindLevel ->  -- no representation polymorphism in kinds. yet.
     do { ty1' <- tc_lhs_type mode ty1 liftedTypeKind
        ; ty2' <- tc_lhs_type mode ty2 liftedTypeKind
-       ; checkExpectedKind (HsFunTy noExtField ty1 ty2) (mkVisFunTy ty1' ty2')
+       ; checkExpectedKind (HsFunTy noAnn ty1 ty2) (mkVisFunTy ty1' ty2')
                            liftedTypeKind exp_kind }
 
 ---------------------------
@@ -1060,11 +1063,15 @@ splitHsAppTys hs_ty
     is_app (HsParTy _ (L _ ty))    = is_app ty
     is_app _                       = False
 
+    go :: LHsType GhcRn
+       -> [HsArg (LHsType GhcRn) (LHsKind GhcRn)]
+       -> (LHsType GhcRn,
+           [HsArg (LHsType GhcRn) (LHsKind GhcRn)]) -- AZ temp
     go (L _  (HsAppTy _ f a))      as = go f (HsValArg a : as)
     go (L _  (HsAppKindTy l ty k)) as = go ty (HsTypeArg l k : as)
     go (L sp (HsParTy _ f))        as = go f (HsArgPar sp : as)
     go (L _  (HsOpTy _ l op@(L sp _) r)) as
-      = ( L sp (HsTyVar noExtField NotPromoted op)
+      = ( L (locA sp) (HsTyVar noAnn NotPromoted op)
         , HsValArg l : HsValArg r : as )
     go f as = (f, as)
 
@@ -2198,7 +2205,7 @@ kcCheckDeclHeader_sig kisig name flav
         KindedTyVar _ v v_hs_ki -> do
           v_ki <- tcLHsKindSig (TyVarBndrKindCtxt (unLoc v)) v_hs_ki
           discardResult $ -- See Note [discardResult in kcCheckDeclHeader_sig]
-            unifyKind (Just (HsTyVar noExtField NotPromoted v))
+            unifyKind (Just (HsTyVar noAnn NotPromoted v))
                       (tyBinderType tb)
                       v_ki
         XTyVarBndr nec -> noExtCon nec
@@ -2739,7 +2746,7 @@ tcHsQTyVarBndr _ new_tv (KindedTyVar _ (L _ tv_nm) lhs_kind)
 
            _ -> new_tv tv_nm kind }
   where
-    hs_tv = HsTyVar noExtField NotPromoted (noLoc tv_nm)
+    hs_tv = HsTyVar noAnn NotPromoted (noLocA tv_nm)
             -- Used for error messages only
 
 tcHsQTyVarBndr _ _ (XTyVarBndr nec) = noExtCon nec

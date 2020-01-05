@@ -34,11 +34,13 @@ import GHC.Hs.Lit
 import GHC.Hs.Extension
 import GHC.Hs.Types
 import GHC.Hs.Binds
+import Lexer (AddApiAnn)
 
 -- others:
 import TcEvidence
 import GHC.Core
 import GHC.Types.Name
+import GHC.Types.Name.Reader
 import GHC.Types.Name.Set
 import GHC.Types.Basic
 import GHC.Core.ConLike
@@ -157,7 +159,7 @@ data SyntaxExprTc = SyntaxExprTc { syn_expr      :: HsExpr GhcTc
 -- | This is used for rebindable-syntax pieces that are too polymorphic
 -- for tcSyntaxOp (trS_fmap and the mzip in ParStmt)
 noExpr :: HsExpr (GhcPass p)
-noExpr = HsLit noExtField (HsString (SourceText  "noExpr") (fsLit "noExpr"))
+noExpr = HsLit noComments (HsString (SourceText  "noExpr") (fsLit "noExpr"))
 
 noSyntaxExpr :: forall p. IsPass p => SyntaxExpr (GhcPass p)
                               -- Before renaming, and sometimes after
@@ -176,7 +178,7 @@ mkSyntaxExpr = SyntaxExprRn
 -- | Make a 'SyntaxExpr' from a 'Name' (the "rn" is because this is used in the
 -- renamer).
 mkRnSyntaxExpr :: Name -> SyntaxExprRn
-mkRnSyntaxExpr name = SyntaxExprRn $ HsVar noExtField $ noLoc name
+mkRnSyntaxExpr name = SyntaxExprRn $ HsVar noExtField $ noLocA name
 
 instance Outputable SyntaxExprRn where
   ppr (SyntaxExprRn expr) = ppr expr
@@ -238,7 +240,7 @@ is Less Cool because
 -- | A Haskell expression.
 data HsExpr p
   = HsVar     (XVar p)
-              (Located (IdP p)) -- ^ Variable
+              (LocatedA (IdP p)) -- ^ Variable
 
                              -- See Note [Located RdrNames]
 
@@ -257,7 +259,7 @@ data HsExpr p
 
   | HsRecFld  (XRecFld p)
               (AmbiguousFieldOcc p) -- ^ Variable pointing to record selector
-                                    -- Not in use after typechecking
+                                    -- Only in use from renaming to typechecking
 
   | HsOverLabel (XOverLabel p)
                 (Maybe (IdP p)) FastString
@@ -410,7 +412,7 @@ data HsExpr p
 
   -- For details on above see note [Api annotations] in ApiAnnotation
   | HsDo        (XDo p)                  -- Type of the whole expression
-                (HsStmtContext GhcRn)    -- The parameterisation is unimportant
+                (HsStmtContext Name)     -- The parameterisation is unimportant
                                          -- because in this context we never use
                                          -- the PatGuard or ParStmt variant
                 (Located [ExprLStmt p]) -- "do":one or more stmts
@@ -436,7 +438,7 @@ data HsExpr p
   -- For details on above see note [Api annotations] in ApiAnnotation
   | RecordCon
       { rcon_ext      :: XRecordCon p
-      , rcon_con_name :: Located (IdP p)    -- The constructor name;
+      , rcon_con_name :: LocatedA (IdP p)   -- The constructor name;
                                             --  not used after type checking
       , rcon_flds     :: HsRecordBinds p }  -- The fields
 
@@ -587,74 +589,104 @@ deriving instance (Data (hs_syn GhcTc), Typeable hs_syn) => Data (HsWrap hs_syn)
 
 -- ---------------------------------------------------------------------
 
+-- API Annotations types
+
+data ApiAnnHsCase = ApiAnnHsCase
+      { hsCaseAnnCase :: SrcSpan
+      , hsCaseAnnOf   :: SrcSpan
+      , hsCaseAnnsRest :: [AddApiAnn]
+      } deriving Data
+
+-- ---------------------------------------------------------------------
+
 type instance XVar           (GhcPass _) = NoExtField
-type instance XUnboundVar    (GhcPass _) = NoExtField
+
+type instance XUnboundVar    GhcPs = ApiAnn
+type instance XUnboundVar    GhcRn = NoExtField
+type instance XUnboundVar    GhcTc = NoExtField
+
 type instance XConLikeOut    (GhcPass _) = NoExtField
 type instance XRecFld        (GhcPass _) = NoExtField
-type instance XOverLabel     (GhcPass _) = NoExtField
-type instance XIPVar         (GhcPass _) = NoExtField
-type instance XOverLitE      (GhcPass _) = NoExtField
-type instance XLitE          (GhcPass _) = NoExtField
-type instance XLam           (GhcPass _) = NoExtField
-type instance XLamCase       (GhcPass _) = NoExtField
-type instance XApp           (GhcPass _) = NoExtField
+type instance XOverLabel     (GhcPass _) = ApiAnnCO
+type instance XIPVar         (GhcPass _) = ApiAnnCO
+type instance XOverLitE      (GhcPass _) = ApiAnnCO
+type instance XLitE          (GhcPass _) = ApiAnnCO
 
-type instance XAppTypeE      (GhcPass _) = NoExtField
+type instance XLam           GhcPs = ApiAnn
+type instance XLam           GhcRn = ApiAnn -- to simplify mkHsLam
+type instance XLam           GhcTc = NoExtField
 
-type instance XOpApp         GhcPs = NoExtField
+type instance XLamCase       (GhcPass _) = ApiAnnCO
+type instance XApp           (GhcPass _) = ApiAnnCO
+
+type instance XAppTypeE      (GhcPass _) = ApiAnnCO
+
+type instance XOpApp         GhcPs = ApiAnn
 type instance XOpApp         GhcRn = Fixity
 type instance XOpApp         GhcTc = Fixity
 
-type instance XNegApp        (GhcPass _) = NoExtField
-type instance XPar           (GhcPass _) = NoExtField
-type instance XSectionL      (GhcPass _) = NoExtField
-type instance XSectionR      (GhcPass _) = NoExtField
-type instance XExplicitTuple (GhcPass _) = NoExtField
+type instance XNegApp        GhcPs = ApiAnn
+type instance XNegApp        GhcRn = NoExtField
+type instance XNegApp        GhcTc = NoExtField
 
-type instance XExplicitSum   GhcPs = NoExtField
+type instance XPar           (GhcPass _) = ApiAnn
+type instance XSectionL      (GhcPass _) = ApiAnnCO
+type instance XSectionR      (GhcPass _) = ApiAnnCO
+
+type instance XExplicitTuple GhcPs = ApiAnn
+type instance XExplicitTuple GhcRn = NoExtField
+type instance XExplicitTuple GhcTc = NoExtField
+
+type instance XExplicitSum   GhcPs = ApiAnn
 type instance XExplicitSum   GhcRn = NoExtField
 type instance XExplicitSum   GhcTc = [Type]
 
-type instance XCase          (GhcPass _) = NoExtField
+type instance XCase          GhcPs = ApiAnn' ApiAnnHsCase
+type instance XCase          GhcRn = NoExtField
+type instance XCase          GhcTc = NoExtField
 
-type instance XIf            GhcPs = Bool      -- True <=> might use rebindable syntax
+type instance XIf            GhcPs = (ApiAnn, Bool) -- True <=> might use rebindable syntax
 type instance XIf            GhcRn = NoExtField
 type instance XIf            GhcTc = NoExtField
 
-type instance XMultiIf       GhcPs = NoExtField
+type instance XMultiIf       GhcPs = ApiAnn
 type instance XMultiIf       GhcRn = NoExtField
 type instance XMultiIf       GhcTc = Type
 
-type instance XLet           (GhcPass _) = NoExtField
+type instance XLet           GhcPs = ApiAnn
+type instance XLet           GhcRn = NoExtField
+type instance XLet           GhcTc = NoExtField
 
-type instance XDo            GhcPs = NoExtField
+type instance XDo            GhcPs = ApiAnn
 type instance XDo            GhcRn = NoExtField
 type instance XDo            GhcTc = Type
 
-type instance XExplicitList  GhcPs = NoExtField
+type instance XExplicitList  GhcPs = ApiAnnCO
 type instance XExplicitList  GhcRn = NoExtField
 type instance XExplicitList  GhcTc = Type
 
-type instance XRecordCon     GhcPs = NoExtField
+type instance XRecordCon     GhcPs = ApiAnn
 type instance XRecordCon     GhcRn = NoExtField
 type instance XRecordCon     GhcTc = RecordConTc
 
-type instance XRecordUpd     GhcPs = NoExtField
+type instance XRecordUpd     GhcPs = ApiAnn
 type instance XRecordUpd     GhcRn = NoExtField
 type instance XRecordUpd     GhcTc = RecordUpdTc
 
-type instance XExprWithTySig (GhcPass _) = NoExtField
+type instance XExprWithTySig GhcPs = ApiAnn
+type instance XExprWithTySig GhcRn = NoExtField
+type instance XExprWithTySig GhcTc = NoExtField
 
-type instance XArithSeq      GhcPs = NoExtField
+type instance XArithSeq      GhcPs = ApiAnn
 type instance XArithSeq      GhcRn = NoExtField
 type instance XArithSeq      GhcTc = PostTcExpr
 
-type instance XBracket       (GhcPass _) = NoExtField
+type instance XBracket       (GhcPass _) = ApiAnn
 
 type instance XRnBracketOut  (GhcPass _) = NoExtField
 type instance XTcBracketOut  (GhcPass _) = NoExtField
 
-type instance XSpliceE       (GhcPass _) = NoExtField
+type instance XSpliceE       (GhcPass _) = ApiAnnCO
 type instance XProc          (GhcPass _) = NoExtField
 
 type instance XStatic        GhcPs = NoExtField
@@ -1007,12 +1039,13 @@ ppr_expr (HsLamCase _ matches)
   = sep [ sep [text "\\case"],
           nest 2 (pprMatches matches) ]
 
-ppr_expr (HsCase _ expr matches@(MG { mg_alts = L _ [_] }))
-  = sep [ sep [text "case", nest 4 (ppr expr), ptext (sLit "of {")],
-          nest 2 (pprMatches matches) <+> char '}']
-ppr_expr (HsCase _ expr matches)
+ppr_expr (HsCase _ expr matches@(MG { mg_alts = L _ alts }))
   = sep [ sep [text "case", nest 4 (ppr expr), ptext (sLit "of")],
-          nest 2 (pprMatches matches) ]
+          pp_alts ]
+  where
+    pp_alts | null alts = text "{}"
+            | otherwise = nest 2 (pprMatches matches)
+ppr_expr (HsCase _ _ (XMatchGroup nec)) = noExtCon nec
 
 ppr_expr (HsIf _ _ e1 e2 e3)
   = sep [hsep [text "if", nest 2 (ppr e1), ptext (sLit "then")],
@@ -1212,7 +1245,7 @@ hsExprNeedsParens p = go
 -- and if so, surrounds @e@ with an 'HsPar'. Otherwise, it simply returns @e@.
 parenthesizeHsExpr :: IsPass p => PprPrec -> LHsExpr (GhcPass p) -> LHsExpr (GhcPass p)
 parenthesizeHsExpr p le@(L loc e)
-  | hsExprNeedsParens p e = L loc (HsPar noExtField le)
+  | hsExprNeedsParens p e = L loc (HsPar noAnn le)
   | otherwise             = le
 
 stripParensHsExpr :: LHsExpr (GhcPass p) -> LHsExpr (GhcPass p)
@@ -1360,15 +1393,31 @@ type instance XCmdArrApp  GhcPs = NoExtField
 type instance XCmdArrApp  GhcRn = NoExtField
 type instance XCmdArrApp  GhcTc = Type
 
-type instance XCmdArrForm (GhcPass _) = NoExtField
-type instance XCmdApp     (GhcPass _) = NoExtField
-type instance XCmdLam     (GhcPass _) = NoExtField
-type instance XCmdPar     (GhcPass _) = NoExtField
-type instance XCmdCase    (GhcPass _) = NoExtField
-type instance XCmdIf      (GhcPass _) = NoExtField
-type instance XCmdLet     (GhcPass _) = NoExtField
+type instance XCmdArrForm GhcPs = ApiAnn
+type instance XCmdArrForm GhcRn = NoExtField
+type instance XCmdArrForm GhcTc = NoExtField
 
-type instance XCmdDo      GhcPs = NoExtField
+type instance XCmdApp     (GhcPass _) = ApiAnnCO
+
+type instance XCmdLam     GhcPs = ApiAnn
+type instance XCmdLam     GhcRn = NoExtField
+type instance XCmdLam     GhcTc = NoExtField
+
+type instance XCmdPar     (GhcPass _) = ApiAnn
+
+type instance XCmdCase    GhcPs = ApiAnn' ApiAnnHsCase
+type instance XCmdCase    GhcRn = NoExtField
+type instance XCmdCase    GhcTc = NoExtField
+
+type instance XCmdIf      GhcPs = ApiAnn
+type instance XCmdIf      GhcRn = NoExtField
+type instance XCmdIf      GhcTc = NoExtField
+
+type instance XCmdLet     GhcPs = ApiAnn
+type instance XCmdLet     GhcRn = NoExtField
+type instance XCmdLet     GhcTc = NoExtField
+
+type instance XCmdDo      GhcPs = ApiAnn
 type instance XCmdDo      GhcRn = NoExtField
 type instance XCmdDo      GhcTc = Type
 
@@ -1572,7 +1621,7 @@ type LMatch id body = Located (Match id body)
 data Match p body
   = Match {
         m_ext :: XCMatch p body,
-        m_ctxt :: HsMatchContext (NoGhcTc p),
+        m_ctxt :: HsMatchContext (IdP (NoGhcTc p)),
           -- See note [m_ctxt in Match]
         m_pats :: [LPat p], -- The patterns
         m_grhss :: (GRHSs p body)
@@ -2690,8 +2739,8 @@ pp_dotdot = text " .. "
 --
 -- Context of a pattern match. This is more subtle than it would seem. See Note
 -- [Varieties of pattern matches].
-data HsMatchContext p
-  = FunRhs { mc_fun        :: LIdP p    -- ^ function binder of @f@
+data HsMatchContext id -- Not an extensible tag
+  = FunRhs { mc_fun        :: LocatedA id   -- ^ function binder of @f@
            , mc_fixity     :: LexicalFixity -- ^ fixing of @f@
            , mc_strictness :: SrcStrictness -- ^ was @f@ banged?
                                             -- See Note [FunBind vs PatBind]
@@ -2711,16 +2760,16 @@ data HsMatchContext p
                                 --    tell matchWrapper what sort of
                                 --    runtime error message to generate]
 
-  | StmtCtxt (HsStmtContext p)  -- ^Pattern of a do-stmt, list comprehension,
-                                -- pattern guard, etc
+  | StmtCtxt (HsStmtContext id)  -- ^Pattern of a do-stmt, list comprehension,
+                                 -- pattern guard, etc
 
   | ThPatSplice            -- ^A Template Haskell pattern splice
   | ThPatQuote             -- ^A Template Haskell pattern quotation [p| (a,b) |]
   | PatSyn                 -- ^A pattern synonym declaration
-deriving instance Data (HsMatchContext GhcPs)
-deriving instance Data (HsMatchContext GhcRn)
+deriving instance Data (HsMatchContext RdrName)
+deriving instance Data (HsMatchContext Name)
 
-instance OutputableBndrId p => Outputable (HsMatchContext (GhcPass p)) where
+instance Outputable p => Outputable (HsMatchContext p) where
   ppr m@(FunRhs{})          = text "FunRhs" <+> ppr (mc_fun m) <+> ppr (mc_fixity m)
   ppr LambdaExpr            = text "LambdaExpr"
   ppr CaseAlt               = text "CaseAlt"
@@ -2741,7 +2790,7 @@ isPatSynCtxt ctxt =
     _      -> False
 
 -- | Haskell Statement Context.
-data HsStmtContext p
+data HsStmtContext id -- Not a pass
   = ListComp
   | MonadComp
 
@@ -2750,11 +2799,11 @@ data HsStmtContext p
   | ArrowExpr                        -- ^do-notation in an arrow-command context
 
   | GhciStmtCtxt                     -- ^A command-line Stmt in GHCi pat <- rhs
-  | PatGuard (HsMatchContext p)      -- ^Pattern guard for specified thing
-  | ParStmtCtxt (HsStmtContext p)    -- ^A branch of a parallel stmt
-  | TransStmtCtxt (HsStmtContext p)  -- ^A branch of a transform stmt
-deriving instance Data (HsStmtContext GhcPs)
-deriving instance Data (HsStmtContext GhcRn)
+  | PatGuard (HsMatchContext id)     -- ^Pattern guard for specified thing
+  | ParStmtCtxt (HsStmtContext id)   -- ^A branch of a parallel stmt
+  | TransStmtCtxt (HsStmtContext id) -- ^A branch of a transform stmt
+deriving instance Data (HsStmtContext RdrName)
+deriving instance Data (HsStmtContext Name)
 
 isComprehensionContext :: HsStmtContext id -> Bool
 -- Uses comprehension syntax [ e | quals ]
@@ -2794,7 +2843,7 @@ matchSeparator ThPatSplice  = panic "unused"
 matchSeparator ThPatQuote   = panic "unused"
 matchSeparator PatSyn       = panic "unused"
 
-pprMatchContext :: Outputable (IdP p)
+pprMatchContext :: Outputable p
                 => HsMatchContext p -> SDoc
 pprMatchContext ctxt
   | want_an ctxt = text "an" <+> pprMatchContextNoun ctxt
@@ -2804,7 +2853,7 @@ pprMatchContext ctxt
     want_an ProcExpr    = True
     want_an _           = False
 
-pprMatchContextNoun :: Outputable (IdP id)
+pprMatchContextNoun :: Outputable id
                     => HsMatchContext id -> SDoc
 pprMatchContextNoun (FunRhs {mc_fun=L _ fun})
                                     = text "equation for"
@@ -2823,7 +2872,7 @@ pprMatchContextNoun (StmtCtxt ctxt) = text "pattern binding in"
 pprMatchContextNoun PatSyn          = text "pattern synonym declaration"
 
 -----------------
-pprAStmtContext, pprStmtContext :: Outputable (IdP id)
+pprAStmtContext, pprStmtContext :: Outputable id
                                 => HsStmtContext id -> SDoc
 pprAStmtContext ctxt = article <+> pprStmtContext ctxt
   where
@@ -2856,13 +2905,12 @@ pprStmtContext (TransStmtCtxt c) =
   ifPprDebug (sep [text "transformed branch of", pprAStmtContext c])
              (pprStmtContext c)
 
-instance OutputableBndrId p
-      => Outputable (HsStmtContext (GhcPass p)) where
+instance Outputable id => Outputable (HsStmtContext id) where
     ppr = pprStmtContext
 
 -- Used to generate the string for a *runtime* error message
-matchContextErrString :: OutputableBndrId p
-                      => HsMatchContext (GhcPass p) -> SDoc
+matchContextErrString :: Outputable id
+                      => HsMatchContext id -> SDoc
 matchContextErrString (FunRhs{mc_fun=L _ fun})   = text "function" <+> ppr fun
 matchContextErrString CaseAlt                    = text "case"
 matchContextErrString IfAlt                      = text "multi-way if"
@@ -2893,7 +2941,7 @@ pprMatchInCtxt match  = hang (text "In" <+> pprMatchContext (m_ctxt match)
 pprStmtInCtxt :: (OutputableBndrId idL,
                   OutputableBndrId idR,
                   Outputable body)
-              => HsStmtContext (GhcPass idL)
+              => HsStmtContext (IdP (GhcPass idL))
               -> StmtLR (GhcPass idL) (GhcPass idR) body
               -> SDoc
 pprStmtInCtxt ctxt (LastStmt _ e _ _)

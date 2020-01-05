@@ -92,7 +92,7 @@ data Pat p
 
        -- AZ:TODO above comment needs to be updated
   | VarPat      (XVarPat p)
-                (Located (IdP p))  -- ^ Variable Pattern
+                (LocatedA (IdP p))  -- ^ Variable Pattern
 
                              -- See Note [Located RdrNames] in GHC.Hs.Expr
   | LazyPat     (XLazyPat p)
@@ -102,7 +102,7 @@ data Pat p
     -- For details on above see note [Api annotations] in ApiAnnotation
 
   | AsPat       (XAsPat p)
-                (Located (IdP p)) (LPat p)    -- ^ As pattern
+                (LocatedA (IdP p)) (LPat p)   -- ^ As pattern
     -- ^ - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnAt'
 
     -- For details on above see note [Api annotations] in ApiAnnotation
@@ -173,12 +173,14 @@ data Pat p
     -- For details on above see note [Api annotations] in ApiAnnotation
 
         ------------ Constructor patterns ---------------
-  | ConPatIn    (Located (IdP p))
+  | ConPatIn    (XConPatIn p)
+                (LocatedA (IdP p))
                 (HsConPatDetails p)
     -- ^ Constructor Pattern In
 
   | ConPatOut {
-        pat_con     :: Located ConLike,
+        pat_o_ext   :: XConPatOut p,
+        pat_con     :: LocatedA ConLike,
         pat_arg_tys :: [Type],          -- The universal arg types, 1-1 with the universal
                                         -- tyvars of the constructor/pattern synonym
                                         --   Use (conLikeResTy pat_con pat_arg_tys) to get
@@ -241,7 +243,7 @@ data Pat p
 
   -- For details on above see note [Api annotations] in ApiAnnotation
   | NPlusKPat       (XNPlusKPat p)           -- Type of overall pattern
-                    (Located (IdP p))        -- n+k pattern
+                    (LocatedA (IdP p))       -- n+k pattern
                     (Located (HsOverLit p))  -- It'll always be an HsIntegral
                     (HsOverLit p)       -- See Note [NPlusK patterns] in TcPat
                      -- NB: This could be (PostTc ...), but that induced a
@@ -290,27 +292,43 @@ type instance XWildPat GhcRn = NoExtField
 type instance XWildPat GhcTc = Type
 
 type instance XVarPat  (GhcPass _) = NoExtField
-type instance XLazyPat (GhcPass _) = NoExtField
-type instance XAsPat   (GhcPass _) = NoExtField
+
+type instance XLazyPat GhcPs = ApiAnn -- For '~'
+type instance XLazyPat GhcRn = NoExtField
+type instance XLazyPat GhcTc = NoExtField
+
+type instance XAsPat   GhcPs = ApiAnn -- For '@'
+type instance XAsPat   GhcRn = NoExtField
+type instance XAsPat   GhcTc = NoExtField
+
 type instance XParPat  (GhcPass _) = NoExtField
-type instance XBangPat (GhcPass _) = NoExtField
+
+type instance XBangPat GhcPs = ApiAnn -- For '!'
+type instance XBangPat GhcRn = NoExtField
+type instance XBangPat GhcTc = NoExtField
 
 -- Note: XListPat cannot be extended when using GHC 8.0.2 as the bootstrap
 -- compiler, as it triggers https://gitlab.haskell.org/ghc/ghc/issues/14396 for
 -- `SyntaxExpr`
-type instance XListPat GhcPs = NoExtField
+type instance XListPat GhcPs = ApiAnnCO
 type instance XListPat GhcRn = Maybe (SyntaxExpr GhcRn)
 type instance XListPat GhcTc = ListPatTc
 
-type instance XTuplePat GhcPs = NoExtField
+type instance XTuplePat GhcPs = ApiAnn
 type instance XTuplePat GhcRn = NoExtField
 type instance XTuplePat GhcTc = [Type]
 
-type instance XSumPat GhcPs = NoExtField
+type instance XSumPat GhcPs = ApiAnn
 type instance XSumPat GhcRn = NoExtField
 type instance XSumPat GhcTc = [Type]
 
-type instance XViewPat GhcPs = NoExtField
+type instance XConPatIn GhcPs = ApiAnn
+type instance XConPatIn GhcRn = NoExtField
+type instance XConPatIn GhcTc = NoExtField
+
+type instance XConPatOut (GhcPass p) = NoExtField
+
+type instance XViewPat GhcPs = ApiAnn
 type instance XViewPat GhcRn = NoExtField
 type instance XViewPat GhcTc = Type
 
@@ -321,11 +339,11 @@ type instance XNPat GhcPs = NoExtField
 type instance XNPat GhcRn = NoExtField
 type instance XNPat GhcTc = Type
 
-type instance XNPlusKPat GhcPs = NoExtField
+type instance XNPlusKPat GhcPs = ApiAnn
 type instance XNPlusKPat GhcRn = NoExtField
 type instance XNPlusKPat GhcTc = Type
 
-type instance XSigPat GhcPs = NoExtField
+type instance XSigPat GhcPs = ApiAnn
 type instance XSigPat GhcRn = NoExtField
 type instance XSigPat GhcTc = Type
 
@@ -548,7 +566,7 @@ pprPat (TuplePat _ pats bx)
   | otherwise
   = tupleParens (boxityTupleSort bx) (pprWithCommas ppr pats)
 pprPat (SumPat _ pat alt arity) = sumParens (pprAlternative ppr pat alt arity)
-pprPat (ConPatIn con details)   = pprUserCon (unLoc con) details
+pprPat (ConPatIn _ con details) = pprUserCon (unLoc con) details
 pprPat (ConPatOut { pat_con = con
                   , pat_tvs = tvs
                   , pat_dicts = dicts
@@ -606,7 +624,8 @@ mkPrefixConPat :: DataCon ->
                   [OutPat (GhcPass p)] -> [Type] -> OutPat (GhcPass p)
 -- Make a vanilla Prefix constructor pattern
 mkPrefixConPat dc pats tys
-  = noLoc $ ConPatOut { pat_con = noLoc (RealDataCon dc)
+  = noLoc $ ConPatOut { pat_o_ext = noExtField
+                      , pat_con = noLocA (RealDataCon dc)
                       , pat_tvs = []
                       , pat_dicts = []
                       , pat_binds = emptyTcEvBinds
@@ -785,7 +804,7 @@ patNeedsParens p = go
   where
     go (NPlusKPat {})    = p > opPrec
     go (SplicePat {})    = False
-    go (ConPatIn _ ds)   = conPatNeedsParens p ds
+    go (ConPatIn _ _ ds) = conPatNeedsParens p ds
     go cp@(ConPatOut {}) = conPatNeedsParens p (pat_args cp)
     go (SigPat {})       = p >= sigPrec
     go (ViewPat {})      = True
@@ -847,5 +866,5 @@ collectEvVarsPat pat =
                                    $ hsConPatArgs args
     SigPat  _ p _    -> collectEvVarsLPat p
     CoPat _ _ p _    -> collectEvVarsPat  p
-    ConPatIn _  _    -> panic "foldMapPatBag: ConPatIn"
+    ConPatIn _  _ _  -> panic "foldMapPatBag: ConPatIn"
     _other_pat       -> emptyBag

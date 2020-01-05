@@ -558,7 +558,7 @@ a pattern synonym.  What about the /building/ side?
   a bad idea.
 -}
 
-collectPatSynArgInfo :: HsPatSynDetails (Located Name)
+collectPatSynArgInfo :: HsPatSynDetails (LocatedA Name)
                      -> ([Name], [Name], Bool)
 collectPatSynArgInfo details =
   case details of
@@ -568,16 +568,16 @@ collectPatSynArgInfo details =
                          where
                             (vars, sels) = unzip (map splitRecordPatSyn names)
   where
-    splitRecordPatSyn :: RecordPatSynField (Located Name)
+    splitRecordPatSyn :: RecordPatSynField (LocatedA Name)
                       -> (Name, Name)
     splitRecordPatSyn (RecordPatSynField
                        { recordPatSynPatVar     = L _ patVar
                        , recordPatSynSelectorId = L _ selId })
       = (patVar, selId)
 
-addPatSynCtxt :: Located Name -> TcM a -> TcM a
+addPatSynCtxt :: LocatedA Name -> TcM a -> TcM a
 addPatSynCtxt (L loc name) thing_inside
-  = setSrcSpan loc $
+  = setSrcSpan (locA loc) $
     addErrCtxt (text "In the declaration for pattern synonym"
                 <+> quotes (ppr name)) $
     thing_inside
@@ -591,7 +591,7 @@ wrongNumberOfParmsErr name decl_arity missing
 
 -------------------------
 -- Shared by both tcInferPatSyn and tcCheckPatSyn
-tc_patsyn_finish :: Located Name      -- ^ PatSyn Name
+tc_patsyn_finish :: LocatedA Name     -- ^ PatSyn Name
                  -> HsPatSynDir GhcRn -- ^ PatSyn type (Uni/Bidir/ExplicitBidir)
                  -> Bool              -- ^ Whether infix
                  -> LPat GhcTc        -- ^ Pattern of the PatSyn
@@ -679,7 +679,7 @@ tc_patsyn_finish lname dir is_infix lpat'
 ************************************************************************
 -}
 
-tcPatSynMatcher :: Located Name
+tcPatSynMatcher :: LocatedA Name
                 -> LPat GhcTc
                 -> ([TcTyVar], ThetaType, TcEvBinds, [EvVar])
                 -> ([TcTyVar], [TcType], ThetaType, [EvTerm])
@@ -691,8 +691,9 @@ tcPatSynMatcher (L loc name) lpat
                 (univ_tvs, req_theta, req_ev_binds, req_dicts)
                 (ex_tvs, ex_tys, prov_theta, prov_dicts)
                 (args, arg_tys) pat_ty
-  = do { rr_name <- newNameAt (mkTyVarOcc "rep") loc
-       ; tv_name <- newNameAt (mkTyVarOcc "r")   loc
+  = do { let loc' = locA loc
+       ; rr_name <- newNameAt (mkTyVarOcc "rep") loc'
+       ; tv_name <- newNameAt (mkTyVarOcc "r")   loc'
        ; let rr_tv  = mkTyVar rr_name runtimeRepTy
              rr     = mkTyVarTy rr_tv
              res_tv = mkTyVar tv_name (tYPE rr)
@@ -782,7 +783,7 @@ isUnidirectional ExplicitBidirectional{} = False
 ************************************************************************
 -}
 
-mkPatSynBuilderId :: HsPatSynDir a -> Located Name
+mkPatSynBuilderId :: HsPatSynDir a -> LocatedA Name
                   -> [TyVarBinder] -> ThetaType
                   -> [TyVarBinder] -> ThetaType
                   -> [Type] -> Type
@@ -866,7 +867,7 @@ tcPatSynBuilderBind (PSB { psb_id = L loc name
     mk_mg :: LHsExpr GhcRn -> MatchGroup GhcRn (LHsExpr GhcRn)
     mk_mg body = mkMatchGroup Generated [builder_match]
           where
-            builder_args  = [L loc (VarPat noExtField (L loc n))
+            builder_args  = [L (locA loc) (VarPat noExtField (L loc n))
                             | L loc n <- args]
             builder_match = mkMatch (mkPrefixFunRhs (L loc name))
                                     builder_args body
@@ -910,7 +911,7 @@ add_void need_dummy_arg ty
   | need_dummy_arg = mkVisFunTy voidPrimTy ty
   | otherwise      = ty
 
-tcPatToExpr :: Name -> [Located Name] -> LPat GhcRn
+tcPatToExpr :: Name -> [LocatedA Name] -> LPat GhcRn
             -> Either MsgDoc (LHsExpr GhcRn)
 -- Given a /pattern/, return an /expression/ that builds a value
 -- that matches the pattern.  E.g. if the pattern is (Just [x]),
@@ -925,14 +926,14 @@ tcPatToExpr name args pat = go pat
     lhsVars = mkNameSet (map unLoc args)
 
     -- Make a prefix con for prefix and infix patterns for simplicity
-    mkPrefixConExpr :: Located Name -> [LPat GhcRn]
+    mkPrefixConExpr :: LocatedA Name -> [LPat GhcRn]
                     -> Either MsgDoc (HsExpr GhcRn)
     mkPrefixConExpr lcon@(L loc _) pats
       = do { exprs <- mapM go pats
-           ; return (foldl' (\x y -> HsApp noExtField (L loc x) y)
+           ; return (foldl' (\x y -> HsApp noComments (L (locA loc) x) y)
                             (HsVar noExtField lcon) exprs) }
 
-    mkRecordConExpr :: Located Name -> HsRecFields GhcRn (LPat GhcRn)
+    mkRecordConExpr :: LocatedA Name -> HsRecFields GhcRn (LPat GhcRn)
                     -> Either MsgDoc (HsExpr GhcRn)
     mkRecordConExpr con fields
       = do { exprFields <- mapM go fields
@@ -942,7 +943,7 @@ tcPatToExpr name args pat = go pat
     go (L loc p) = L loc <$> go1 p
 
     go1 :: Pat GhcRn -> Either MsgDoc (HsExpr GhcRn)
-    go1 (ConPatIn con info)
+    go1 (ConPatIn _ con info)
       = case info of
           PrefixCon ps  -> mkPrefixConExpr con ps
           InfixCon l r  -> mkPrefixConExpr con [l,r]
@@ -956,7 +957,7 @@ tcPatToExpr name args pat = go pat
         = return $ HsVar noExtField (L l var)
         | otherwise
         = Left (quotes (ppr var) <+> text "is not bound by the LHS of the pattern synonym")
-    go1 (ParPat _ pat)          = fmap (HsPar noExtField) $ go pat
+    go1 (ParPat _ pat)          = fmap (HsPar noAnn) $ go pat
     go1 p@(ListPat reb pats)
       | Nothing <- reb = do { exprs <- mapM go pats
                             ; return $ ExplicitList noExtField Nothing exprs }
@@ -969,12 +970,12 @@ tcPatToExpr name args pat = go pat
                                          ; return $ ExplicitSum noExtField alt arity
                                                                    (noLoc expr)
                                          }
-    go1 (LitPat _ lit)              = return $ HsLit noExtField lit
+    go1 (LitPat _ lit)              = return $ HsLit noComments lit
     go1 (NPat _ (L _ n) mb_neg _)
         | Just (SyntaxExprRn neg) <- mb_neg
                                     = return $ unLoc $ foldl' nlHsApp (noLoc neg)
-                                                       [noLoc (HsOverLit noExtField n)]
-        | otherwise                 = return $ HsOverLit noExtField n
+                                                       [noLoc (HsOverLit noComments n)]
+        | otherwise                 = return $ HsOverLit noComments n
     go1 (ConPatOut{})               = panic "ConPatOut in output of renamer"
     go1 (CoPat{})                   = panic "CoPat in output of renamer"
     go1 (SplicePat _ (HsSpliced _ _ (HsSplicedPat pat)))

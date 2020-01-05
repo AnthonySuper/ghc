@@ -150,7 +150,7 @@ dsHsBind dflags b@(FunBind { fun_id = L _ fun
                            , fun_ext = co_fn
                            , fun_tick = tick })
  = do   { (args, body) <- matchWrapper
-                           (mkPrefixFunRhs (noLoc $ idName fun))
+                           (mkPrefixFunRhs (noLocA $ idName fun))
                            Nothing matches
         ; core_wrap <- dsHsWrapper co_fn
         ; let body' = mkOptTickBox tick body

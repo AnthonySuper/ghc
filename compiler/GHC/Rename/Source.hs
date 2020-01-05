@@ -244,6 +244,9 @@ addTcgDUs tcg_env dus = tcg_env { tcg_dus = tcg_dus tcg_env `plusDU` dus }
 rnList :: (a -> RnM (b, FreeVars)) -> [Located a] -> RnM ([Located b], FreeVars)
 rnList f xs = mapFvRn (wrapLocFstM f) xs
 
+rnListA :: (a -> RnM (b, FreeVars)) -> [LocatedA a] -> RnM ([LocatedA b], FreeVars)
+rnListA f xs = mapFvRn (wrapLocFstMA f) xs
+
 {-
 *********************************************************
 *                                                       *
@@ -288,7 +291,7 @@ rnSrcWarnDecls _ []
 rnSrcWarnDecls bndr_set decls'
   = do { -- check for duplicates
        ; mapM_ (\ dups -> let ((L loc rdr) :| (lrdr':_)) = dups
-                          in addErrAt loc (dupWarnDecl lrdr' rdr))
+                          in addErrAt (locA loc) (dupWarnDecl lrdr' rdr))
                warn_rdr_dups
        ; pairs_s <- mapM (addLocM rn_deprec) decls
        ; return (WarnSome ((concat pairs_s))) }
@@ -306,17 +309,18 @@ rnSrcWarnDecls bndr_set decls'
 
    what = text "deprecation"
 
+   warn_rdr_dups :: [NonEmpty (LocatedA RdrName)] -- AZ Temp
    warn_rdr_dups = findDupRdrNames
                    $ concatMap (\(L _ (Warning _ ns _)) -> ns) decls
 
-findDupRdrNames :: [Located RdrName] -> [NonEmpty (Located RdrName)]
+findDupRdrNames :: [LocatedA RdrName] -> [NonEmpty (LocatedA RdrName)]
 findDupRdrNames = findDupsEq (\ x -> \ y -> rdrNameOcc (unLoc x) == rdrNameOcc (unLoc y))
 
 -- look for duplicates among the OccNames;
 -- we check that the names are defined above
 -- invt: the lists returned by findDupsEq always have at least two elements
 
-dupWarnDecl :: Located RdrName -> RdrName -> SDoc
+dupWarnDecl :: LocatedA RdrName -> RdrName -> SDoc
 -- Located RdrName -> DeprecDecl RdrName -> SDoc
 dupWarnDecl d rdr_name
   = vcat [text "Multiple warning declarations for" <+> quotes (ppr rdr_name),
@@ -671,7 +675,7 @@ rnClsInstDecl (XClsInstDecl nec) = noExtCon nec
 
 rnFamInstEqn :: HsDocContext
              -> AssocTyFamInfo
-             -> [Located RdrName]    -- Kind variables from the equation's RHS
+             -> [LocatedA RdrName]    -- Kind variables from the equation's RHS
              -> FamInstEqn GhcPs rhs
              -> (HsDocContext -> rhs -> RnM (rhs', FreeVars))
              -> RnM (FamInstEqn GhcRn rhs', FreeVars)
@@ -722,7 +726,7 @@ rnFamInstEqn doc atfi rhs_kvars
 
                        -- Report unused binders on the LHS
                        -- See Note [Unused type variables in family instances]
-                    ; let groups :: [NonEmpty (Located RdrName)]
+                    ; let groups :: [NonEmpty (LocatedA RdrName)]
                           groups = equivClasses cmpLocated $
                                    pat_kity_vars_with_dups
                     ; nms_dups <- mapM (lookupOccRn . unLoc) $
@@ -749,7 +753,7 @@ rnFamInstEqn doc atfi rhs_kvars
 
        ; return (HsIB { hsib_ext = all_imp_var_names -- Note [Wildcards in family instances]
                       , hsib_body
-                          = FamEqn { feqn_ext    = noExtField
+                          = FamEqn { feqn_ext    = noAnn
                                    , feqn_tycon  = tycon'
                                    , feqn_bndrs  = bndrs' <$ mb_bndrs
                                    , feqn_pats   = pats'
@@ -784,7 +788,7 @@ data AssocTyFamInfo
 -- equation ('ClosedTyFam') or not ('NotClosedTyFam').
 data ClosedTyFamInfo
   = NotClosedTyFam
-  | ClosedTyFam (Located RdrName) Name
+  | ClosedTyFam (LocatedA RdrName) Name
                 -- The names (RdrName and Name) of the closed type family
 
 rnTyFamInstEqn :: AssocTyFamInfo
@@ -977,7 +981,7 @@ rnSrcDerivDecl (DerivDecl _ ty mds overlap)
            <- rnLDerivStrategy DerivDeclCtx mds $
               rnHsSigWcType BindUnlessForall DerivDeclCtx ty
        ; warnNoDerivStrat mds' loc
-       ; return (DerivDecl noExtField ty' mds' overlap, fvs) }
+       ; return (DerivDecl noAnn ty' mds' overlap, fvs) }
   where
     loc = getLoc $ hsib_body $ hswc_body ty
 rnSrcDerivDecl (XDerivDecl nec) = noExtCon nec
@@ -998,7 +1002,7 @@ standaloneDerivErr
 rnHsRuleDecls :: RuleDecls GhcPs -> RnM (RuleDecls GhcRn, FreeVars)
 rnHsRuleDecls (HsRules { rds_src = src
                        , rds_rules = rules })
-  = do { (rn_rules,fvs) <- rnList rnHsRuleDecl rules
+  = do { (rn_rules,fvs) <- rnListA rnHsRuleDecl rules
        ; return (HsRules { rds_ext = noExtField
                          , rds_src = src
                          , rds_rules = rn_rules }, fvs) }
@@ -1830,10 +1834,10 @@ rnLDerivStrategy doc mds thing_inside
         failWith $ illegalDerivStrategyErr ds
 
       case ds of
-        StockStrategy    -> boring_case StockStrategy
-        AnyclassStrategy -> boring_case AnyclassStrategy
-        NewtypeStrategy  -> boring_case NewtypeStrategy
-        ViaStrategy via_ty ->
+        StockStrategy    _ -> boring_case (StockStrategy noExtField)
+        AnyclassStrategy _ -> boring_case (AnyclassStrategy noExtField)
+        NewtypeStrategy  _ -> boring_case (NewtypeStrategy noExtField)
+        ViaStrategy (XViaStrategyPs _ via_ty) ->
           do (via_ty', fvs1) <- rnHsSigType doc TypeLevel via_ty
              let HsIB { hsib_ext  = via_imp_tvs
                       , hsib_body = via_body } = via_ty'
@@ -1900,11 +1904,11 @@ rnFamDecl mb_cls (FamilyDecl { fdLName = tycon, fdTyVars = tyvars
      kvs = extractRdrKindSigVars res_sig
 
      ----------------------
-     rn_info :: Located Name
+     rn_info :: LocatedA Name
              -> FamilyInfo GhcPs -> RnM (FamilyInfo GhcRn, FreeVars)
      rn_info (L _ fam_name) (ClosedTypeFamily (Just eqns))
        = do { (eqns', fvs)
-                <- rnList (rnTyFamInstEqn NonAssocTyFamEqn (ClosedTyFam tycon fam_name))
+                <- rnListA (rnTyFamInstEqn NonAssocTyFamEqn (ClosedTyFam tycon fam_name))
                                           -- no class context
                           eqns
             ; return (ClosedTypeFamily (Just eqns'), fvs) }
@@ -1986,16 +1990,16 @@ rnInjectivityAnn :: LHsQTyVars GhcRn           -- ^ Type variables declared in
                  -> LInjectivityAnn GhcPs      -- ^ Injectivity annotation
                  -> RnM (LInjectivityAnn GhcRn)
 rnInjectivityAnn tvBndrs (L _ (TyVarSig _ resTv))
-                 (L srcSpan (InjectivityAnn injFrom injTo))
+                 (L srcSpan (InjectivityAnn x injFrom injTo))
  = do
-   { (injDecl'@(L _ (InjectivityAnn injFrom' injTo')), noRnErrors)
+   { (injDecl'@(L _ (InjectivityAnn _ injFrom' injTo')), noRnErrors)
           <- askNoErrs $
              bindLocalNames [hsLTyVarName resTv] $
              -- The return type variable scopes over the injectivity annotation
              -- e.g.   type family F a = (r::*) | r -> a
              do { injFrom' <- rnLTyVar injFrom
                 ; injTo'   <- mapM rnLTyVar injTo
-                ; return $ L srcSpan (InjectivityAnn injFrom' injTo') }
+                ; return $ L srcSpan (InjectivityAnn x injFrom' injTo') }
 
    ; let tvNames  = Set.fromList $ hsAllLTyVarNames tvBndrs
          resName  = hsLTyVarName resTv
@@ -2007,7 +2011,7 @@ rnInjectivityAnn tvBndrs (L _ (TyVarSig _ resTv))
    -- not-in-scope variables) don't check the validity of injectivity
    -- annotation. This gives better error messages.
    ; when (noRnErrors && not lhsValid) $
-        addErrAt (getLoc injFrom)
+        addErrAt (getLocA injFrom)
               ( vcat [ text $ "Incorrect type variable on the LHS of "
                            ++ "injectivity condition"
               , nest 5
@@ -2031,12 +2035,12 @@ rnInjectivityAnn tvBndrs (L _ (TyVarSig _ resTv))
 --
 -- So we rename injectivity annotation like we normally would except that
 -- this time we expect "result" to be reported not in scope by rnLTyVar.
-rnInjectivityAnn _ _ (L srcSpan (InjectivityAnn injFrom injTo)) =
+rnInjectivityAnn _ _ (L srcSpan (InjectivityAnn x injFrom injTo)) =
    setSrcSpan srcSpan $ do
    (injDecl', _) <- askNoErrs $ do
      injFrom' <- rnLTyVar injFrom
      injTo'   <- mapM rnLTyVar injTo
-     return $ L srcSpan (InjectivityAnn injFrom' injTo')
+     return $ L srcSpan (InjectivityAnn x injFrom' injTo')
    return $ injDecl'
 
 {-
@@ -2072,7 +2076,7 @@ rnConDecl :: ConDecl GhcPs -> RnM (ConDecl GhcRn, FreeVars)
 rnConDecl decl@(ConDeclH98 { con_name = name, con_ex_tvs = ex_tvs
                            , con_mb_cxt = mcxt, con_args = args
                            , con_doc = mb_doc })
-  = do  { _        <- addLocM checkConName name
+  = do  { _        <- addLocM checkConName (reLoc name)
         ; new_name <- lookupLocatedTopBndrRn name
         ; mb_doc'  <- rnMbLHsDoc mb_doc
 
@@ -2108,7 +2112,7 @@ rnConDecl decl@(ConDeclGADT { con_names   = names
                             , con_args    = args
                             , con_res_ty  = res_ty
                             , con_doc = mb_doc })
-  = do  { mapM_ (addLocM checkConName) names
+  = do  { mapM_ (addLocM checkConName . reLoc) names
         ; new_names <- mapM lookupLocatedTopBndrRn names
         ; mb_doc'   <- rnMbLHsDoc mb_doc
 
@@ -2213,16 +2217,16 @@ extendPatSynEnv val_decls local_fix_env thing = do {
       | (L bind_loc (PatSynBind _ (PSB { psb_id = L _ n
                                        , psb_args = RecCon as }))) <- bind
       = do
-          bnd_name <- newTopSrcBinder (L bind_loc n)
+          bnd_name <- newTopSrcBinder (L (noAnnSrcSpan bind_loc) n)
           let rnames = map recordPatSynSelectorId as
-              mkFieldOcc :: Located RdrName -> LFieldOcc GhcPs
-              mkFieldOcc (L l name) = L l (FieldOcc noExtField (L l name))
+              mkFieldOcc :: LocatedA RdrName -> LFieldOcc GhcPs
+              mkFieldOcc (L l name) = L (locA l) (FieldOcc noExtField (L l name))
               field_occs =  map mkFieldOcc rnames
           flds     <- mapM (newRecordSelector False [bnd_name]) field_occs
           return ((bnd_name, flds): names)
       | L bind_loc (PatSynBind _ (PSB { psb_id = L _ n})) <- bind
       = do
-        bnd_name <- newTopSrcBinder (L bind_loc n)
+        bnd_name <- newTopSrcBinder (L (noAnnSrcSpan bind_loc) n)
         return ((bnd_name, []): names)
       | otherwise
       = return names
@@ -2244,10 +2248,10 @@ rnFds fds
            ; tys2' <- rnHsTyVars tys2
            ; return (tys1', tys2') }
 
-rnHsTyVars :: [Located RdrName] -> RnM [Located Name]
+rnHsTyVars :: [LocatedA RdrName] -> RnM [LocatedA Name]
 rnHsTyVars tvs  = mapM rnHsTyVar tvs
 
-rnHsTyVar :: Located RdrName -> RnM (Located Name)
+rnHsTyVar :: LocatedA RdrName -> RnM (LocatedA Name)
 rnHsTyVar (L l tyvar) = do
   tyvar' <- lookupOccRn tyvar
   return (L l tyvar')

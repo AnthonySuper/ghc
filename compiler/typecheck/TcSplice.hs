@@ -645,7 +645,7 @@ tcTopSplice expr res_ty
        ; lcl_env <- getLclEnv
        ; let delayed_splice
               = DelayedSplice lcl_env expr res_ty q_expr
-       ; return (HsSpliceE noExtField (XSplice (HsSplicedT delayed_splice)))
+       ; return (HsSpliceE noAnn (XSplice (HsSplicedT delayed_splice)))
 
        }
 
@@ -757,8 +757,8 @@ runAnnotation target expr = do
               ; wrapper <- instCall AnnOrigin [expr_ty] [mkClassPred data_class [expr_ty]]
               ; let specialised_to_annotation_wrapper_expr
                       = L loc (mkHsWrap wrapper
-                                 (HsVar noExtField (L loc to_annotation_wrapper_id)))
-              ; return (L loc (HsApp noExtField
+                                 (HsVar noExtField (L (noAnnSrcSpan loc) to_annotation_wrapper_id)))
+              ; return (L loc (HsApp noComments
                                 specialised_to_annotation_wrapper_expr expr'))
                                 })
 

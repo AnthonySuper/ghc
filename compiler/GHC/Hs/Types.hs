@@ -282,7 +282,7 @@ quantified in left-to-right order in kind signatures is nice since:
 -}
 
 -- | Located Haskell Context
-type LHsContext pass = Located (HsContext pass)
+type LHsContext pass = LocatedA (HsContext pass)
       -- ^ 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnUnit'
       -- For details on above see note [Api annotations] in ApiAnnotation
 
@@ -292,7 +292,7 @@ noLHsContext :: LHsContext pass
 --     class () => C a where ...
 -- from
 --     class C a where ...
-noLHsContext = noLoc []
+noLHsContext = noLocA []
 
 -- | Haskell Context
 type HsContext pass = [LHsType pass]
@@ -487,11 +487,11 @@ instance OutputableBndr HsIPName where
 data HsTyVarBndr pass
   = UserTyVar        -- no explicit kinding
          (XUserTyVar pass)
-         (Located (IdP pass))
+         (LocatedA (IdP pass))
         -- See Note [Located RdrNames] in GHC.Hs.Expr
   | KindedTyVar
          (XKindedTyVar pass)
-         (Located (IdP pass))
+         (LocatedA (IdP pass))
          (LHsKind pass)  -- The user-supplied kind signature
         -- ^
         --  - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnOpen',
@@ -544,7 +544,7 @@ data HsType pass
   | HsTyVar  (XTyVar pass)
               PromotionFlag    -- Whether explicitly promoted,
                                -- for the pretty printer
-             (Located (IdP pass))
+             (LocatedA (IdP pass))
                   -- Type variable, type constructor, or data constructor
                   -- see Note [Promotions (HsTyVar)]
                   -- See Note [Located RdrNames] in GHC.Hs.Expr
@@ -593,7 +593,7 @@ data HsType pass
     -- For details on above see note [Api annotations] in ApiAnnotation
 
   | HsOpTy              (XOpTy pass)
-                        (LHsType pass) (Located (IdP pass)) (LHsType pass)
+                        (LHsType pass) (LocatedA (IdP pass)) (LHsType pass)
       -- ^ - 'ApiAnnotation.AnnKeywordId' : None
 
       -- For details on above see note [Api annotations] in ApiAnnotation
@@ -711,19 +711,19 @@ data NewHsTypeX
 instance Outputable NewHsTypeX where
   ppr (NHsCoreTy ty) = ppr ty
 
-type instance XForAllTy        (GhcPass _) = NoExtField
-type instance XQualTy          (GhcPass _) = NoExtField
-type instance XTyVar           (GhcPass _) = NoExtField
+type instance XForAllTy        (GhcPass _) = ApiAnn
+type instance XQualTy          (GhcPass _) = ApiAnn
+type instance XTyVar           (GhcPass _) = ApiAnn
 type instance XAppTy           (GhcPass _) = NoExtField
-type instance XFunTy           (GhcPass _) = NoExtField
-type instance XListTy          (GhcPass _) = NoExtField
-type instance XTupleTy         (GhcPass _) = NoExtField
-type instance XSumTy           (GhcPass _) = NoExtField
-type instance XOpTy            (GhcPass _) = NoExtField
-type instance XParTy           (GhcPass _) = NoExtField
-type instance XIParamTy        (GhcPass _) = NoExtField
+type instance XFunTy           (GhcPass _) = ApiAnn
+type instance XListTy          (GhcPass _) = ApiAnn
+type instance XTupleTy         (GhcPass _) = ApiAnn
+type instance XSumTy           (GhcPass _) = ApiAnn
+type instance XOpTy            (GhcPass _) = ApiAnn
+type instance XParTy           (GhcPass _) = ApiAnn
+type instance XIParamTy        (GhcPass _) = ApiAnn
 type instance XStarTy          (GhcPass _) = NoExtField
-type instance XKindSig         (GhcPass _) = NoExtField
+type instance XKindSig         (GhcPass _) = ApiAnn
 
 type instance XAppKindTy       (GhcPass _) = SrcSpan -- Where the `@` lives
 
@@ -731,15 +731,18 @@ type instance XSpliceTy        GhcPs = NoExtField
 type instance XSpliceTy        GhcRn = NoExtField
 type instance XSpliceTy        GhcTc = Kind
 
-type instance XDocTy           (GhcPass _) = NoExtField
-type instance XBangTy          (GhcPass _) = NoExtField
-type instance XRecTy           (GhcPass _) = NoExtField
+type instance XDocTy           (GhcPass _) = ApiAnn
+type instance XBangTy          (GhcPass _) = ApiAnn
 
-type instance XExplicitListTy  GhcPs = NoExtField
+type instance XRecTy           GhcPs = ApiAnn
+type instance XRecTy           GhcRn = NoExtField
+type instance XRecTy           GhcTc = NoExtField
+
+type instance XExplicitListTy  GhcPs = ApiAnn
 type instance XExplicitListTy  GhcRn = NoExtField
 type instance XExplicitListTy  GhcTc = Kind
 
-type instance XExplicitTupleTy GhcPs = NoExtField
+type instance XExplicitTupleTy GhcPs = ApiAnn
 type instance XExplicitTupleTy GhcRn = NoExtField
 type instance XExplicitTupleTy GhcTc = [Kind]
 
@@ -1042,19 +1045,20 @@ hsAllLTyVarNames (HsQTvs { hsq_ext = kvs
   = kvs ++ hsLTyVarNames tvs
 hsAllLTyVarNames (XLHsQTyVars nec) = noExtCon nec
 
-hsLTyVarLocName :: LHsTyVarBndr (GhcPass p) -> Located (IdP (GhcPass p))
-hsLTyVarLocName = mapLoc hsTyVarName
+hsLTyVarLocName :: LHsTyVarBndr (GhcPass p) -> LocatedA (IdP (GhcPass p))
+hsLTyVarLocName (L l a) = L (noAnnSrcSpan l) (hsTyVarName a)
 
-hsLTyVarLocNames :: LHsQTyVars (GhcPass p) -> [Located (IdP (GhcPass p))]
+hsLTyVarLocNames :: LHsQTyVars (GhcPass p) -> [LocatedA (IdP (GhcPass p))]
 hsLTyVarLocNames qtvs = map hsLTyVarLocName (hsQTvExplicit qtvs)
 
 -- | Convert a LHsTyVarBndr to an equivalent LHsType.
 hsLTyVarBndrToType :: LHsTyVarBndr (GhcPass p) -> LHsType (GhcPass p)
 hsLTyVarBndrToType = mapLoc cvt
-  where cvt (UserTyVar _ n) = HsTyVar noExtField NotPromoted n
+  where cvt (UserTyVar _ n) = HsTyVar noAnn NotPromoted n
         cvt (KindedTyVar _ (L name_loc n) kind)
-          = HsKindSig noExtField
-                   (L name_loc (HsTyVar noExtField NotPromoted (L name_loc n))) kind
+          = HsKindSig noAnn
+                   (L (locA name_loc)
+                           (HsTyVar noAnn NotPromoted (L name_loc n))) kind
         cvt (XTyVarBndr nec) = noExtCon nec
 
 -- | Convert a LHsTyVarBndrs to a list of types.
@@ -1101,9 +1105,9 @@ isLHsForAllTy _                     = False
 mkAnonWildCardTy :: HsType GhcPs
 mkAnonWildCardTy = HsWildCardTy noExtField
 
-mkHsOpTy :: LHsType (GhcPass p) -> Located (IdP (GhcPass p))
+mkHsOpTy :: LHsType (GhcPass p) -> LocatedA (IdP (GhcPass p))
          -> LHsType (GhcPass p) -> HsType (GhcPass p)
-mkHsOpTy ty1 op ty2 = HsOpTy noExtField ty1 op ty2
+mkHsOpTy ty1 op ty2 = HsOpTy noAnn ty1 op ty2
 
 mkHsAppTy :: LHsType (GhcPass p) -> LHsType (GhcPass p) -> LHsType (GhcPass p)
 mkHsAppTy t1 t2
@@ -1145,7 +1149,7 @@ splitHsFunType other = ([], other)
 -- used to examine the result of a GADT-like datacon, so it doesn't handle
 -- *all* cases (like lists, tuples, (~), etc.)
 hsTyGetAppHead_maybe :: LHsType (GhcPass p)
-                     -> Maybe (Located (IdP (GhcPass p)))
+                     -> Maybe (LocatedA (IdP (GhcPass p)))
 hsTyGetAppHead_maybe = go
   where
     go (L _ (HsTyVar _ _ ln))          = Just ln
@@ -1159,7 +1163,7 @@ hsTyGetAppHead_maybe = go
 ------------------------------------------------------------
 -- Arguments in an expression/type after splitting
 data HsArg tm ty
-  = HsValArg tm   -- Argument is an ordinary expression     (f arg)
+  = HsValArg tm          -- Argument is an ordinary expression     (f arg)
   | HsTypeArg SrcSpan ty -- Argument is a visible type application (f @ty)
                          -- SrcSpan is location of the `@`
   | HsArgPar SrcSpan -- See Note [HsArgPar]
@@ -1290,7 +1294,7 @@ getLHsInstDeclHead inst_ty
   = body_ty
 
 getLHsInstDeclClass_maybe :: LHsSigType (GhcPass p)
-                          -> Maybe (Located (IdP (GhcPass p)))
+                          -> Maybe (LocatedA (IdP (GhcPass p)))
 -- Works on (HsSigType RdrName)
 getLHsInstDeclClass_maybe inst_ty
   = do { let head_ty = getLHsInstDeclHead inst_ty
@@ -1314,7 +1318,7 @@ type LFieldOcc pass = Located (FieldOcc pass)
 -- both the 'RdrName' the user originally wrote, and after the
 -- renamer, the selector function.
 data FieldOcc pass = FieldOcc { extFieldOcc     :: XCFieldOcc pass
-                              , rdrNameFieldOcc :: Located RdrName
+                              , rdrNameFieldOcc :: LocatedA RdrName
                                  -- ^ See Note [Located RdrNames] in GHC.Hs.Expr
                               }
 
@@ -1331,7 +1335,7 @@ type instance XXFieldOcc (GhcPass _) = NoExtCon
 instance Outputable (FieldOcc pass) where
   ppr = ppr . rdrNameFieldOcc
 
-mkFieldOcc :: Located RdrName -> FieldOcc GhcPs
+mkFieldOcc :: LocatedA RdrName -> FieldOcc GhcPs
 mkFieldOcc rdr = FieldOcc noExtField rdr
 
 
@@ -1348,8 +1352,8 @@ mkFieldOcc rdr = FieldOcc noExtField rdr
 -- Note [Disambiguating record fields] in TcExpr.
 -- See Note [Located RdrNames] in GHC.Hs.Expr
 data AmbiguousFieldOcc pass
-  = Unambiguous (XUnambiguous pass) (Located RdrName)
-  | Ambiguous   (XAmbiguous pass)   (Located RdrName)
+  = Unambiguous (XUnambiguous pass) (LocatedA RdrName)
+  | Ambiguous   (XAmbiguous pass)   (LocatedA RdrName)
   | XAmbiguousFieldOcc (XXAmbiguousFieldOcc pass)
 
 type instance XUnambiguous GhcPs = NoExtField
@@ -1369,7 +1373,7 @@ instance OutputableBndr (AmbiguousFieldOcc (GhcPass p)) where
   pprInfixOcc  = pprInfixOcc . rdrNameAmbiguousFieldOcc
   pprPrefixOcc = pprPrefixOcc . rdrNameAmbiguousFieldOcc
 
-mkAmbiguousFieldOcc :: Located RdrName -> AmbiguousFieldOcc GhcPs
+mkAmbiguousFieldOcc :: LocatedA RdrName -> AmbiguousFieldOcc GhcPs
 mkAmbiguousFieldOcc rdr = Unambiguous noExtField rdr
 
 rdrNameAmbiguousFieldOcc :: AmbiguousFieldOcc (GhcPass p) -> RdrName
@@ -1687,7 +1691,7 @@ lhsTypeHasLeadingPromotionQuote ty
 -- returns @ty@.
 parenthesizeHsType :: PprPrec -> LHsType (GhcPass p) -> LHsType (GhcPass p)
 parenthesizeHsType p lty@(L loc ty)
-  | hsTypeNeedsParens p ty = L loc (HsParTy noExtField lty)
+  | hsTypeNeedsParens p ty = L loc (HsParTy noAnn lty)
   | otherwise              = lty
 
 -- | @'parenthesizeHsContext' p ctxt@ checks if @ctxt@ is a single constraint

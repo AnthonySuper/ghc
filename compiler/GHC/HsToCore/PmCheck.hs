@@ -273,7 +273,7 @@ checkSingle dflags ctxt@(DsMatchContext kind locn) var p = do
 -- | Exhaustive for guard matches, is used for guards in pattern bindings and
 -- in @MultiIf@ expressions. Returns the 'Deltas' covered by the RHSs.
 checkGuardMatches
-  :: HsMatchContext GhcRn         -- ^ Match context, for warning messages
+  :: HsMatchContext Name          -- ^ Match context, for warning messages
   -> GRHSs GhcTc (LHsExpr GhcTc)  -- ^ The GRHSs to check
   -> DsM [Deltas]                 -- ^ Covered 'Deltas' for each RHS, for long
                                   --   distance info

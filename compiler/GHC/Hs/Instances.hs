@@ -426,3 +426,7 @@ deriving instance Eq (IE GhcRn)
 deriving instance Eq (IE GhcTc)
 
 -- ---------------------------------------------------------------------
+
+deriving instance Data XViaStrategyPs
+
+-- ---------------------------------------------------------------------
