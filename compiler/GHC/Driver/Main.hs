@@ -1383,9 +1383,14 @@ hscWriteIface dflags iface no_change mod_location = do
       = let with_hi = replaceExtension baseName suffix
         in  addBootSuffix_maybe (mi_boot iface) with_hi
 
+-- | 'Id's which have no CAF references. This is a result of analysis of C--.
+-- It is always safe to use an empty 'NonCaffySet'. TODO Refer to Note.
+newtype NonCaffySet = NonCaffySet NameSet
+  deriving (Semigroup, Monoid)
+
 -- | Compile to hard-code.
 hscGenHardCode :: HscEnv -> CgGuts -> ModLocation -> FilePath
-               -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], NameSet)
+               -> IO (FilePath, Maybe FilePath, [(ForeignSrcLang, FilePath)], NonCaffySet)
                -- ^ @Just f@ <=> _stub.c is f
 hscGenHardCode hsc_env cgguts location output_filename = do
         let CgGuts{ -- This is the last use of the ModGuts in a compilation.
@@ -1542,7 +1547,7 @@ doCodeGen   :: HscEnv -> Module -> [TyCon]
             -> CollectedCCs
             -> [StgTopBinding]
             -> HpcInfo
-            -> IO (Stream IO CmmGroupSRTs NameSet)
+            -> IO (Stream IO CmmGroupSRTs NonCaffySet)
          -- Note we produce a 'Stream' of CmmGroups, so that the
          -- backend can be run incrementally.  Otherwise it generates all
          -- the C-- up front, which has a significant space cost.
