@@ -845,7 +845,7 @@ mkHsVarBind :: SrcSpan -> RdrName -> LHsExpr GhcPs -> LHsBind GhcPs
 mkHsVarBind loc var rhs = mkSimpleGeneratedFunBind loc var [] rhs
 
 mkVarBind :: IdP (GhcPass p) -> LHsExpr (GhcPass p) -> LHsBind (GhcPass p)
-mkVarBind var rhs = L (getLoc rhs) $
+mkVarBind var rhs = L (noAnnSrcSpan $ getLoc rhs) $
                     VarBind { var_ext = noExtField,
                               var_id = var, var_rhs = rhs }
 
@@ -873,7 +873,7 @@ isInfixFunBind _ = False
 mkSimpleGeneratedFunBind :: SrcSpan -> RdrName -> [LPat GhcPs]
                 -> LHsExpr GhcPs -> LHsBind GhcPs
 mkSimpleGeneratedFunBind loc fun pats expr
-  = L loc $ mkFunBind Generated (L (noAnnSrcSpan loc) fun)
+  = L (noAnnSrcSpan loc) $ mkFunBind Generated (L (noAnnSrcSpan loc) fun)
               [mkMatch (mkPrefixFunRhs (L (noAnnSrcSpan loc) fun)) pats expr
                        (noLoc emptyLocalBinds)]
 

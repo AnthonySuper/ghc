@@ -340,7 +340,7 @@ rnAnnDecl ann@(HsAnnotation _ s provenance expr)
     do { (provenance', provenance_fvs) <- rnAnnProvenance provenance
        ; (expr', expr_fvs) <- setStage (Splice Untyped) $
                               rnLExpr expr
-       ; return (HsAnnotation noExtField s provenance' expr',
+       ; return (HsAnnotation noAnn s provenance' expr',
                  provenance_fvs `plusFV` expr_fvs) }
 rnAnnDecl (XAnnDecl nec) = noExtCon nec
 
@@ -484,7 +484,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
     --
     checkCanonicalMonadInstances
       | cls == applicativeClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan loc $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -499,7 +499,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
                   _ -> return ()
 
       | cls == monadClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan loc $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -530,7 +530,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
     --
     checkCanonicalMonoidInstances
       | cls == semigroupClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan loc $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
               case mbind of
                   FunBind { fun_id      = L _ name
                           , fun_matches = mg }
@@ -541,7 +541,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
                   _ -> return ()
 
       | cls == monoidClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan loc $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -2217,7 +2217,7 @@ extendPatSynEnv val_decls local_fix_env thing = do {
       | (L bind_loc (PatSynBind _ (PSB { psb_id = L _ n
                                        , psb_args = RecCon as }))) <- bind
       = do
-          bnd_name <- newTopSrcBinder (L (noAnnSrcSpan bind_loc) n)
+          bnd_name <- newTopSrcBinder (L bind_loc n)
           let rnames = map recordPatSynSelectorId as
               mkFieldOcc :: LocatedA RdrName -> LFieldOcc GhcPs
               mkFieldOcc (L l name) = L (locA l) (FieldOcc noExtField (L l name))
@@ -2226,7 +2226,7 @@ extendPatSynEnv val_decls local_fix_env thing = do {
           return ((bnd_name, flds): names)
       | L bind_loc (PatSynBind _ (PSB { psb_id = L _ n})) <- bind
       = do
-        bnd_name <- newTopSrcBinder (L (noAnnSrcSpan bind_loc) n)
+        bnd_name <- newTopSrcBinder (L bind_loc n)
         return ((bnd_name, []): names)
       | otherwise
       = return names
@@ -2277,7 +2277,7 @@ addl :: HsGroup GhcPs -> [LHsDecl GhcPs]
      -> RnM (HsGroup GhcPs, Maybe (SpliceDecl GhcPs, [LHsDecl GhcPs]))
 -- This stuff reverses the declarations (again) but it doesn't matter
 addl gp []           = return (gp, Nothing)
-addl gp (L l d : ds) = add gp l d ds
+addl gp (L l d : ds) = add gp (locA l) d ds
 
 
 add :: HsGroup GhcPs -> SrcSpan -> HsDecl GhcPs -> [LHsDecl GhcPs]
@@ -2325,7 +2325,7 @@ add gp@(HsGroup {hs_valds = ts}) l (SigD _ d) ds
 
 -- Value declarations: use add_bind
 add gp@(HsGroup {hs_valds  = ts}) l (ValD _ d) ds
-  = addl (gp { hs_valds = add_bind (L l d) ts }) ds
+  = addl (gp { hs_valds = add_bind (L (noAnnSrcSpan l) d) ts }) ds
 
 -- Role annotations: added to the TyClGroup
 add gp@(HsGroup {hs_tyclds = ts}) l (RoleAnnotD _ d) ds

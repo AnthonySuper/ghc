@@ -2056,7 +2056,7 @@ mkFunBindSE arity loc fun pats_and_exprs
 mkRdrFunBind :: LocatedA RdrName -> [LMatch GhcPs (LHsExpr GhcPs)]
              -> LHsBind GhcPs
 mkRdrFunBind fun@(L loc _fun_rdr) matches
-  = L (locA loc) (mkFunBind Generated fun matches)
+  = L loc (mkFunBind Generated fun matches)
 
 -- | Make a function binding. If no equations are given, produce a function
 -- with the given arity that uses an empty case expression for the last
@@ -2084,7 +2084,7 @@ mkRdrFunBindEC :: Arity
                -> [LMatch GhcPs (LHsExpr GhcPs)]
                -> LHsBind GhcPs
 mkRdrFunBindEC arity catch_all fun@(L loc _fun_rdr) matches
-  = L (locA loc) (mkFunBind Generated fun matches')
+  = L loc (mkFunBind Generated fun matches')
  where
    -- Catch-all eqn looks like
    --     fmap _ z = case z of {}
@@ -2108,7 +2108,7 @@ mkRdrFunBindEC arity catch_all fun@(L loc _fun_rdr) matches
 mkRdrFunBindSE :: Arity -> LocatedA RdrName ->
                     [LMatch GhcPs (LHsExpr GhcPs)] -> LHsBind GhcPs
 mkRdrFunBindSE arity fun@(L loc fun_rdr) matches
-  = L (locA loc) (mkFunBind Generated fun matches')
+  = L loc (mkFunBind Generated fun matches')
  where
    -- Catch-all eqn looks like
    --     compare _ _ = error "Void compare"

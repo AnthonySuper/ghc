@@ -1791,14 +1791,14 @@ rep_bind (L loc (FunBind
         ; p    <- repPvar fn'
         ; ans  <- repVal p guardcore wherecore
         ; ans' <- wrapGenSyms ss ans
-        ; return (loc, ans') }
+        ; return (locA loc, ans') }
 
 rep_bind (L loc (FunBind { fun_id = fn
                          , fun_matches = MG { mg_alts = L _ ms } }))
  =   do { ms1 <- mapM repClauseTup ms
         ; fn' <- lookupLBinder fn
         ; ans <- repFun fn' (nonEmptyCoreList ms1)
-        ; return (loc, ans) }
+        ; return (locA loc, ans) }
 
 rep_bind (L _ (FunBind { fun_matches = XMatchGroup nec })) = noExtCon nec
 
@@ -1809,7 +1809,7 @@ rep_bind (L loc (PatBind { pat_lhs = pat
         ; guardcore <- addBinds ss (repGuards guards)
         ; ans  <- repVal patcore guardcore wherecore
         ; ans' <- wrapGenSyms ss ans
-        ; return (loc, ans') }
+        ; return (locA loc, ans') }
 rep_bind (L _ (PatBind _ _ (XGRHSs nec) _)) = noExtCon nec
 
 rep_bind (L _ (VarBind { var_id = v, var_rhs = e}))
@@ -1834,7 +1834,7 @@ rep_bind (L loc (PatSynBind _ (PSB { psb_id   = syn
             ; pat'   <- repLP pat
             ; repPatSynD syn' args' dir' pat' })
        ; patSynD'' <- wrapGenArgSyms args ss patSynD'
-       ; return (loc, patSynD'') }
+       ; return (locA loc, patSynD'') }
   where
     mkGenArgSyms :: HsPatSynDetails (LocatedA Name) -> MetaM [GenSymBind]
     -- for Record Pattern Synonyms we want to conflate the selector

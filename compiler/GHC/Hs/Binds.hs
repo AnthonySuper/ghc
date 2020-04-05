@@ -156,7 +156,7 @@ type HsBind   id = HsBindLR   id id
 type LHsBindsLR idL idR = Bag (LHsBindLR idL idR)
 
 -- | Located Haskell Binding with separate Left and Right identifier types
-type LHsBindLR  idL idR = Located (HsBindLR idL idR)
+type LHsBindLR  idL idR = LocatedA (HsBindLR idL idR)
 
 {- Note [FunBind vs PatBind]
    ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -663,7 +663,7 @@ pprLHsBindsForUser binds sigs
 
     decls :: [(SrcSpan, SDoc)]
     decls = [(loc, ppr sig)  | L loc sig <- sigs] ++
-            [(loc, ppr bind) | L loc bind <- bagToList binds]
+            [(locA loc, ppr bind) | L loc bind <- bagToList binds]
 
     sort_by_loc decls = sortBy (SrcLoc.leftmost_smallest `on` fst) decls
 

@@ -127,7 +127,7 @@ guessSourceFile binds orig_file =
      -- Try look for a file generated from a .hsc file to a
      -- .hs file, by peeking ahead.
      let top_pos = catMaybes $ foldr (\ (L pos _) rest ->
-                                 srcSpanFileName_maybe pos : rest) [] binds
+                               srcSpanFileName_maybe (locA pos) : rest) [] binds
      in
      case top_pos of
         (file_name:_) | ".hsc" `isSuffixOf` unpackFS file_name
@@ -308,7 +308,7 @@ addTickLHsBind (L pos (funBind@(FunBind { fun_id = L _ id }))) = do
     MG {} -> return ()
     _     -> panic "addTickLHsBind"
 
-  blackListed <- isBlackListed pos
+  blackListed <- isBlackListed (locA pos)
   exported_names <- liftM exports getEnv
 
   -- We don't want to generate code for blacklisted positions
@@ -321,7 +321,7 @@ addTickLHsBind (L pos (funBind@(FunBind { fun_id = L _ id }))) = do
   tick <- if not blackListed &&
                shouldTickBind density toplev exported simple inline
              then
-                bindTick density name pos fvs
+                bindTick density name (locA pos) fvs
              else
                 return Nothing
 
@@ -361,14 +361,14 @@ addTickLHsBind (L pos (pat@(PatBind { pat_lhs = lhs
 
     -- Allocate the ticks
 
-    rhs_tick <- bindTick density name pos fvs
+    rhs_tick <- bindTick density name (locA pos) fvs
     let rhs_ticks = rhs_tick `mbCons` initial_rhs_ticks
 
     patvar_tickss <- case simplePatId of
       Just{} -> return initial_patvar_tickss
       Nothing -> do
         let patvars = map getOccString (collectPatBinders lhs)
-        patvar_ticks <- mapM (\v -> bindTick density v pos fvs) patvars
+        patvar_ticks <- mapM (\v -> bindTick density v (locA pos) fvs) patvars
         return
           (zipWith mbCons patvar_ticks
                           (initial_patvar_tickss ++ repeat []))

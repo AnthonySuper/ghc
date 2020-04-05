@@ -756,7 +756,7 @@ tcPatSynMatcher (L loc name) lpat
                            , fun_matches = mg
                            , fun_ext = idHsWrapper
                            , fun_tick = [] }
-             matcher_bind = unitBag (noLoc bind)
+             matcher_bind = unitBag (noLocA bind)
 
        ; traceTc "tcPatSynMatcher" (ppr name $$ ppr (idType matcher_id))
        ; traceTc "tcPatSynMatcher" (ppr matcher_bind)
@@ -850,7 +850,7 @@ tcPatSynBuilderBind (PSB { psb_id = L loc name
 
        ; traceTc "tcPatSynBuilderBind {" $
          ppr patsyn $$ ppr builder_id <+> dcolon <+> ppr (idType builder_id)
-       ; (builder_binds, _) <- tcPolyCheck emptyPragEnv sig (noLoc bind)
+       ; (builder_binds, _) <- tcPolyCheck emptyPragEnv sig (noLocA bind)
        ; traceTc "tcPatSynBuilderBind }" $ ppr builder_binds
        ; return builder_binds } } }
 

@@ -75,7 +75,7 @@ mkMaps instances decls =
              -> ( [(Name, HsDocString)]
                 , [(Name, Map Int (HsDocString))]
                 )
-    mappings (L (RealSrcSpan l _) decl, docStrs) =
+    mappings (L (SrcSpanAnn _ (RealSrcSpan l _)) decl, docStrs) =
            (dm, am)
       where
         doc = concatDocs docStrs
@@ -91,7 +91,7 @@ mkMaps instances decls =
         subNs = [ n | (n, _, _) <- subs ]
         dm = [(n, d) | (n, Just d) <- zip ns (repeat doc) ++ zip subNs subDocs]
         am = [(n, args) | n <- ns] ++ zip subNs subArgs
-    mappings (L (UnhelpfulSpan _) _, _) = ([], [])
+    mappings (L (SrcSpanAnn _ (UnhelpfulSpan _)) _, _) = ([], [])
 
     instanceMap :: Map RealSrcSpan Name
     instanceMap = M.fromList [(l, n) | n <- instances, RealSrcSpan l _ <- [getSrcSpan n] ]
@@ -235,13 +235,13 @@ isValD _ = False
 -- | All the sub declarations of a class (that we handle), ordered by
 -- source location, with documentation attached if it exists.
 classDecls :: TyClDecl GhcRn -> [(LHsDecl GhcRn, [HsDocString])]
-classDecls class_ = filterDecls . collectDocs . sortLocated $ decls
+classDecls class_ = filterDecls . collectDocs . sortLocatedA $ decls
   where
     decls = docs ++ defs ++ sigs ++ ats
-    docs  = mkDecls tcdDocs (DocD noExtField) class_
+    docs  = mkDeclsA tcdDocs (DocD noExtField) class_
     defs  = mkDecls (bagToList . tcdMeths) (ValD noExtField) class_
-    sigs  = mkDecls tcdSigs (SigD noExtField) class_
-    ats   = mkDecls tcdATs (TyClD noExtField . FamDecl noExtField) class_
+    sigs  = mkDeclsA tcdSigs (SigD noExtField) class_
+    ats   = mkDeclsA tcdATs (TyClD noExtField . FamDecl noExtField) class_
 
 -- | Extract function argument docs from inside top-level decls.
 declTypeDocs :: HsDecl GhcRn -> Map Int (HsDocString)
@@ -279,19 +279,19 @@ typeDocs = go 0
 -- | The top-level declarations of a module that we care about,
 -- ordered by source location, with documentation attached if it exists.
 topDecls :: HsGroup GhcRn -> [(LHsDecl GhcRn, [HsDocString])]
-topDecls = filterClasses . filterDecls . collectDocs . sortLocated . ungroup
+topDecls = filterClasses . filterDecls . collectDocs . sortLocatedA . ungroup
 
 -- | Take all declarations except pragmas, infix decls, rules from an 'HsGroup'.
 ungroup :: HsGroup GhcRn -> [LHsDecl GhcRn]
 ungroup group_ =
-  mkDecls (tyClGroupTyClDecls . hs_tyclds) (TyClD noExtField)  group_ ++
-  mkDecls hs_derivds             (DerivD noExtField) group_ ++
-  mkDecls hs_defds               (DefD noExtField)   group_ ++
-  mkDecls hs_fords               (ForD noExtField)   group_ ++
-  mkDecls hs_docs                (DocD noExtField)   group_ ++
-  mkDecls (tyClGroupInstDecls . hs_tyclds) (InstD noExtField)  group_ ++
-  mkDecls (typesigs . hs_valds)  (SigD noExtField)   group_ ++
-  mkDecls (valbinds . hs_valds)  (ValD noExtField)   group_
+  mkDeclsA (tyClGroupTyClDecls . hs_tyclds) (TyClD noExtField)  group_ ++
+  mkDeclsA hs_derivds             (DerivD noExtField) group_ ++
+  mkDeclsA hs_defds               (DefD noExtField)   group_ ++
+  mkDeclsA hs_fords               (ForD noExtField)   group_ ++
+  mkDeclsA hs_docs                (DocD noExtField)   group_ ++
+  mkDeclsA (tyClGroupInstDecls . hs_tyclds) (InstD noExtField)  group_ ++
+  mkDeclsA (typesigs . hs_valds)  (SigD noExtField)   group_ ++
+  mkDecls  (valbinds . hs_valds)  (ValD noExtField)   group_
   where
     typesigs (XValBindsLR (NValBinds _ sig)) = filter (isUserSig . unLoc) sig
     typesigs ValBinds{} = error "expected XValBindsLR"
@@ -351,8 +351,16 @@ isUserSig _             = False
 
 -- | Take a field of declarations from a data structure and create HsDecls
 -- using the given constructor
-mkDecls :: (struct -> [Located decl])
+mkDecls :: (struct -> [GenLocated l decl])
         -> (decl -> hsDecl)
         -> struct
-        -> [Located hsDecl]
+        -> [GenLocated l hsDecl]
 mkDecls field con = map (mapLoc con) . field
+
+-- | Take a field of declarations from a data structure and create HsDecls
+-- using the given constructor
+mkDeclsA :: (struct -> [Located decl])
+        -> (decl -> hsDecl)
+        -> struct
+        -> [LocatedA hsDecl]
+mkDeclsA field con = map (reLocA . mapLoc con) . field

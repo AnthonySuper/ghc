@@ -855,7 +855,7 @@ mkRecSelBind (tycon, fl)
 mkOneRecordSelector :: [ConLike] -> RecSelParent -> FieldLabel
                     -> (Id, LHsBind GhcRn)
 mkOneRecordSelector all_cons idDetails fl
-  = (sel_id, L loc sel_bind)
+  = (sel_id, L (noAnnSrcSpan loc) sel_bind)
   where
     loc      = getSrcSpan sel_name
     loc'     = noAnnSrcSpan loc

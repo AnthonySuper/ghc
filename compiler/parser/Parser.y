@@ -1062,22 +1062,23 @@ topdecls :: { OrdList (LHsDecl GhcPs) }
 
 -- May have trailing semicolons, can be empty
 topdecls_semi :: { OrdList (LHsDecl GhcPs) }
-        : topdecls_semi topdecl semis1 {% amsr $2 $3 >> return ($1 `snocOL` $2) }
+        : topdecls_semi topdecl semis1 {% do { t <- amsA $2 $3
+                                             ; return ($1 `snocOL` t) }}
         | {- empty -}                  { nilOL }
 
 topdecl :: { LHsDecl GhcPs }
-        : cl_decl                               { sL1 $1 (TyClD noExtField (unLoc $1)) }
-        | ty_decl                               { sL1 $1 (TyClD noExtField (unLoc $1)) }
-        | standalone_kind_sig                   { sL1 $1 (KindSigD noExtField (unLoc $1)) }
-        | inst_decl                             { sL1 $1 (InstD noExtField (unLoc $1)) }
-        | stand_alone_deriving                  { sLL $1 $> (DerivD noExtField (unLoc $1)) }
-        | role_annot                            { sL1 $1 (RoleAnnotD noExtField (unLoc $1)) }
-        | 'default' '(' comma_types0 ')'        {% acs (\cs -> sLL $1 $>
+        : cl_decl                               { sL1a $1 (TyClD noExtField (unLoc $1)) }
+        | ty_decl                               { sL1a $1 (TyClD noExtField (unLoc $1)) }
+        | standalone_kind_sig                   { sL1a $1 (KindSigD noExtField (unLoc $1)) }
+        | inst_decl                             { sL1a $1 (InstD noExtField (unLoc $1)) }
+        | stand_alone_deriving                  { sL1a $1 (DerivD noExtField (unLoc $1)) }
+        | role_annot                            { sL1a $1 (RoleAnnotD noExtField (unLoc $1)) }
+        | 'default' '(' comma_types0 ')'        {% acsA (\cs -> sLL $1 $>
                                                     (DefD noExtField (DefaultDecl (ApiAnn [mj AnnDefault $1,mop $2,mcp $4] cs) $3))) }
-        | 'foreign' fdecl          {% acs (\cs -> sLL $1 $> ((snd $ unLoc $2) (ApiAnn (mj AnnForeign $1:(fst $ unLoc $2)) cs))) }
-        | '{-# DEPRECATED' deprecations '#-}'   {% acs (\cs -> sLL $1 $> $ WarningD noExtField (Warnings (ApiAnn [mo $1,mc $3] cs) (getDEPRECATED_PRAGs $1) (fromOL $2))) }
-        | '{-# WARNING' warnings '#-}'          {% acs (\cs -> sLL $1 $> $ WarningD noExtField (Warnings (ApiAnn [mo $1,mc $3] cs) (getWARNING_PRAGs $1) (fromOL $2))) }
-        | '{-# RULES' rules '#-}'               {% acs (\cs -> sLL $1 $> $ RuleD noExtField (HsRules (ApiAnn [mo $1,mc $3] cs) (getRULES_PRAGs $1) (reverse $2))) }
+        | 'foreign' fdecl          {% acsA (\cs -> sLL $1 $> ((snd $ unLoc $2) (ApiAnn (mj AnnForeign $1:(fst $ unLoc $2)) cs))) }
+        | '{-# DEPRECATED' deprecations '#-}'   {% acsA (\cs -> sLL $1 $> $ WarningD noExtField (Warnings (ApiAnn [mo $1,mc $3] cs) (getDEPRECATED_PRAGs $1) (fromOL $2))) }
+        | '{-# WARNING' warnings '#-}'          {% acsA (\cs -> sLL $1 $> $ WarningD noExtField (Warnings (ApiAnn [mo $1,mc $3] cs) (getWARNING_PRAGs $1) (fromOL $2))) }
+        | '{-# RULES' rules '#-}'               {% acsA (\cs -> sLL $1 $> $ RuleD noExtField (HsRules (ApiAnn [mo $1,mc $3] cs) (getRULES_PRAGs $1) (reverse $2))) }
         | annotation { $1 }
         | decl_no_th                            { $1 }
 
@@ -1086,7 +1087,7 @@ topdecl :: { LHsDecl GhcPs }
         -- but we treat an arbitrary expression just as if
         -- it had a $(..) wrapped around it
         | infixexp                              {% runECP_P $1 >>= \ $1 ->
-                                                   return $ sL1A $1 $ mkSpliceDecl (reLoc $1) }
+                                                   return $ sL1 $1 $ mkSpliceDecl (reLoc $1) }
 
 -- Type classes
 --
@@ -1465,19 +1466,19 @@ role : VARID             { sL1 $1 $ Just $ getVARID $1 }
 pattern_synonym_decl :: { LHsDecl GhcPs }
         : 'pattern' pattern_synonym_lhs '=' pat
          {%      let (name, args,as ) = $2 in
-                 acs (\cs -> sLL $1 $> . ValD noExtField $ mkPatSynBind name args $4
+                 acsA (\cs -> sLL $1 $> . ValD noExtField $ mkPatSynBind name args $4
                                                     ImplicitBidirectional
                       (ApiAnn (as ++ [mj AnnPattern $1, mj AnnEqual $3]) cs)) }
 
         | 'pattern' pattern_synonym_lhs '<-' pat
          {%    let (name, args, as) = $2 in
-               acs (\cs -> sLL $1 $> . ValD noExtField $ mkPatSynBind name args $4 Unidirectional
+               acsA (\cs -> sLL $1 $> . ValD noExtField $ mkPatSynBind name args $4 Unidirectional
                        (ApiAnn (as ++ [mj AnnPattern $1,mu AnnLarrow $3]) cs)) }
 
         | 'pattern' pattern_synonym_lhs '<-' pat where_decls
             {% do { let (name, args, as) = $2
                   ; mg <- mkPatSynMatchGroup name (snd $ unLoc $5)
-                  ; acs (\cs -> sLL $1 $> . ValD noExtField $
+                  ; acsA (\cs -> sLL $1 $> . ValD noExtField $
                            mkPatSynBind name args $4 (ExplicitBidirectional mg)
                             (ApiAnn (as ++ ((mj AnnPattern $1:mu AnnLarrow $3:(fst $ unLoc $5))) ) cs))
                    }}
@@ -1523,23 +1524,30 @@ decl_cls  : at_decl_cls                 { $1 }
                        do { v <- checkValSigLhs (reLoc $2)
                           ; let err = text "in default signature" <> colon <+>
                                       quotes (ppr $2)
-                          ; acs (\cs -> sLL $1 $> $ SigD noExtField $ ClassOpSig (ApiAnn [mj AnnDefault $1,mu AnnDcolon $3] cs) True [v] $ mkLHsSigType $4) }}
+                          ; acsA (\cs -> sLL $1 $> $ SigD noExtField $ ClassOpSig (ApiAnn [mj AnnDefault $1,mu AnnDcolon $3] cs) True [v] $ mkLHsSigType $4) }}
 
+-- TODO:AZ: get rid of [AddApiAnn] below. Except they will be used for
+-- leading semicolons? Or decls with nothing but semicolons?
 decls_cls :: { Located ([AddApiAnn],OrdList (LHsDecl GhcPs)) }  -- Reversed
           : decls_cls ';' decl_cls      {% if isNilOL (snd $ unLoc $1)
-                                             then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
+                                             then return (sLLlA $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
                                                                     , unitOL $3))
-                                             else ams (\_ -> lastOL (snd $ unLoc $1)) [mj AnnSemi $2]
-                                           >> return (sLL $1 $> (fst $ unLoc $1
-                                                                ,(snd $ unLoc $1) `appOL` unitOL $3)) }
--- AZ working above
-
+                                            else case unsnocOL (snd $ unLoc $1) of
+                                              (hs,t) -> do
+                                                 t' <- addAnnotationA t AnnSemi (gl $2)
+                                                 return (sLLlA $1 $> (fst $ unLoc $1
+                                                                , snocOL hs t' `appOL` unitOL $3)) }
           | decls_cls ';'               {% if isNilOL (snd $ unLoc $1)
                                              then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
                                                                                    ,snd $ unLoc $1))
-                                             else ams (\_ -> lastOL (snd $ unLoc $1)) [mj AnnSemi $2]
-                                           >> return (sLL $1 $>  (unLoc $1)) }
-          | decl_cls                    { sL1 $1 ([], unitOL $1) }
+                                             else case unsnocOL (snd $ unLoc $1) of
+                                               (hs,t) -> do
+                                                  t' <- addAnnotationA t AnnSemi (gl $2)
+                                                  return (sLL $1 $> (fst $ unLoc $1
+                                                                 , snocOL hs t')) }
+-- AZ working above
+
+          | decl_cls                    { sL1A $1 ([], unitOL $1) }
           | {- empty -}                 { noLoc ([],nilOL) }
 
 decllist_cls
@@ -1562,22 +1570,26 @@ where_cls :: { Located ([AddApiAnn]
 -- Declarations in instance bodies
 --
 decl_inst  :: { Located (OrdList (LHsDecl GhcPs)) }
-decl_inst  : at_decl_inst               { sLL $1 $> (unitOL (sL1 $1 (InstD noExtField (unLoc $1)))) }
-           | decl                       { sLL $1 $> (unitOL $1) }
+decl_inst  : at_decl_inst               { sL1 $1 (unitOL (sL1a $1 (InstD noExtField (unLoc $1)))) }
+           | decl                       { sL1A $1 (unitOL $1) }
 
 decls_inst :: { Located ([AddApiAnn],OrdList (LHsDecl GhcPs)) }   -- Reversed
            : decls_inst ';' decl_inst   {% if isNilOL (snd $ unLoc $1)
                                              then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
                                                                     , unLoc $3))
-                                             else ams (\_ -> lastOL $ snd $ unLoc $1) [mj AnnSemi $2]
-                                           >> return
-                                            (sLL $1 $> (fst $ unLoc $1
-                                                       ,(snd $ unLoc $1) `appOL` unLoc $3)) }
+                                             else case unsnocOL (snd $ unLoc $1) of
+                                               (hs,t) -> do
+                                                  t' <- addAnnotationA t AnnSemi (gl $2)
+                                                  return (sLL $1 $> (fst $ unLoc $1
+                                                                 , snocOL hs t' `appOL` unLoc $3)) }
            | decls_inst ';'             {% if isNilOL (snd $ unLoc $1)
                                              then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
                                                                                    ,snd $ unLoc $1))
-                                             else ams (\_ -> lastOL $ snd $ unLoc $1) [mj AnnSemi $2]
-                                           >> return (sLL $1 $> (unLoc $1)) }
+                                             else case unsnocOL (snd $ unLoc $1) of
+                                               (hs,t) -> do
+                                                  t' <- addAnnotationA t AnnSemi (gl $2)
+                                                  return (sLL $1 $> (fst $ unLoc $1
+                                                                 , snocOL hs t')) }
            | decl_inst                  { sL1 $1 ([],unLoc $1) }
            | {- empty -}                { noLoc ([],nilOL) }
 
@@ -1601,21 +1613,25 @@ where_inst :: { Located ([AddApiAnn]
 --
 decls   :: { Located ([AddApiAnn],OrdList (LHsDecl GhcPs)) }
         : decls ';' decl    {% if isNilOL (snd $ unLoc $1)
-                                 then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
+                                 then return (sLLlA $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
                                                         , unitOL $3))
-                                 else do ams (\_ -> lastOL $ snd $ unLoc $1) [mj AnnSemi $2]
-                                           >> return (
-                                          let { this = unitOL $3;
-                                                rest = snd $ unLoc $1;
-                                                these = rest `appOL` this }
-                                          in rest `seq` this `seq` these `seq`
-                                             (sLL $1 $> (fst $ unLoc $1,these))) }
+                                 else case unsnocOL (snd $ unLoc $1) of
+                                   (hs,t) -> do
+                                      t' <- addAnnotationA t AnnSemi (gl $2)
+                                      let { this = unitOL $3;
+                                            rest = snocOL hs t';
+                                            these = rest `appOL` this }
+                                      return (rest `seq` this `seq` these `seq`
+                                                 (sLLlA $1 $> (fst $ unLoc $1, these))) }
         | decls ';'          {% if isNilOL (snd $ unLoc $1)
                                   then return (sLL $1 $> ((mj AnnSemi $2:(fst $ unLoc $1)
                                                           ,snd $ unLoc $1)))
-                                  else ams (\_ -> lastOL $ snd $ unLoc $1) [mj AnnSemi $2]
-                                           >> return (sLL $1 $> (unLoc $1)) }
-        | decl                          { sL1 $1 ([], unitOL $1) }
+                                  else case unsnocOL (snd $ unLoc $1) of
+                                    (hs,t) -> do
+                                       t' <- addAnnotationA t AnnSemi (gl $2)
+                                       return (sLL $1 $> (fst $ unLoc $1
+                                                      , snocOL hs t')) }
+        | decl                          { sL1A $1 ([], unitOL $1) }
         | {- empty -}                   { noLoc ([],nilOL) }
 
 decllist :: { Located ([AddApiAnn],Located (OrdList (LHsDecl GhcPs))) }
@@ -1795,22 +1811,22 @@ stringlist :: { Located (OrdList (Located StringLiteral)) }
 -- Annotations
 annotation :: { LHsDecl GhcPs }
     : '{-# ANN' name_var aexp '#-}'      {% runECP_P $3 >>= \ $3 ->
-                                            ams (\_ -> sLL $1 $> (AnnD noExtField $ HsAnnotation noExtField
+                                            acsA (\cs -> sLL $1 $> (AnnD noExtField $ HsAnnotation
+                                            (ApiAnn [mo $1,mc $4] cs)
                                             (getANN_PRAGs $1)
-                                            (ValueAnnProvenance $2) (reLoc $3)))
-                                            [mo $1,mc $4] }
+                                            (ValueAnnProvenance $2) (reLoc $3))) }
 
     | '{-# ANN' 'type' tycon aexp '#-}'  {% runECP_P $4 >>= \ $4 ->
-                                            ams (\_ -> sLL $1 $> (AnnD noExtField $ HsAnnotation noExtField
+                                            acsA (\cs -> sLL $1 $> (AnnD noExtField $ HsAnnotation
+                                            (ApiAnn [mo $1,mj AnnType $2,mc $5] cs)
                                             (getANN_PRAGs $1)
-                                            (TypeAnnProvenance $3) (reLoc $4)))
-                                            [mo $1,mj AnnType $2,mc $5] }
+                                            (TypeAnnProvenance $3) (reLoc $4))) }
 
     | '{-# ANN' 'module' aexp '#-}'      {% runECP_P $3 >>= \ $3 ->
-                                            ams (\_ -> sLL $1 $> (AnnD noExtField $ HsAnnotation noExtField
+                                            acsA (\cs -> sLL $1 $> (AnnD noExtField $ HsAnnotation
+                                                (ApiAnn [mo $1,mj AnnModule $2,mc $4] cs)
                                                 (getANN_PRAGs $1)
-                                                 ModuleAnnProvenance (reLoc $3)))
-                                                [mo $1,mj AnnModule $2,mc $4] }
+                                                 ModuleAnnProvenance (reLoc $3))) }
 
 
 -----------------------------------------------------------------------------
@@ -2423,7 +2439,7 @@ There's an awkward overlap with a type signature.  Consider
 -}
 
 docdecl :: { LHsDecl GhcPs }
-        : docdecld { sL1 $1 (DocD noExtField (unLoc $1)) }
+        : docdecld { sL1a $1 (DocD noExtField (unLoc $1)) }
 
 docdecld :: { LDocDecl }
         : docnext                               { sL1 $1 (DocCommentNext (unLoc $1)) }
@@ -2446,7 +2462,7 @@ decl_no_th :: { LHsDecl GhcPs }
                                           (PatBind _ (L lh _lhs) _rhs _) ->
                                                 amsL lh (fst $2) >> return () } ;
                                         _ <- amsL l (ann ++ (fst $ unLoc $3));
-                                        return $! (sL l $ ValD noExtField r) } }
+                                        return $! (sL (noAnnSrcSpan l) $ ValD noExtField r) } }
         | pattern_synonym_decl  { $1 }
         | docdecl               { $1 }
 
@@ -2456,7 +2472,7 @@ decl    :: { LHsDecl GhcPs }
         -- Why do we only allow naked declaration splices in top-level
         -- declarations and not here? Short answer: because readFail009
         -- fails terribly with a panic in cvBindsAndSigs otherwise.
-        | splice_exp            { sLL $1 $> $ mkSpliceDecl $1 }
+        | splice_exp            { sL1a $1 $ mkSpliceDecl $1 }
 
 rhs     :: { Located ([AddApiAnn],GRHSs GhcPs (LHsExpr GhcPs)) }
         : '=' exp wherebinds    {% runECP_P $2 >>= \ $2 -> return $
@@ -2484,71 +2500,62 @@ sigdecl :: { LHsDecl GhcPs }
                         {% do { $1 <- runECP_P $1
                               ; v <- checkValSigLhs (reLoc $1)
                               ; _ <- amsL (comb2Al $1 $>) [mu AnnDcolon $2]
-                              ; return (sLLAl $1 $> $ SigD noExtField $
+                              ; return (reLocA $ sLLAl $1 $> $ SigD noExtField $
                                   TypeSig (ApiAnn [mu AnnDcolon $2] noCom) [v] (mkLHsSigWcType $3))} }
 
         | var ',' sig_vars '::' sigtypedoc
            {% do { let sig = TypeSig (ApiAnn [mu AnnDcolon $4] noCom) ($1 : reverse (unLoc $3))
                                      (mkLHsSigWcType $5)
                  ; addAnnotation (glA $1) AnnComma (gl $2)
-                 ; ams (\_ -> sLLAl $1 $> $ SigD noExtField sig )
+                 ; fmap reLocA $ ams (\_ -> sLLAl $1 $> $ SigD noExtField sig )
                        [mu AnnDcolon $4] } }
 
         | infix prec ops
               {% checkPrecP $2 $3 >>
-                 ams (\cs -> sLL $1 $> $ SigD noExtField
+                 acsA (\cs -> sLL $1 $> $ SigD noExtField
                         (FixSig (ApiAnn [mj AnnInfix $1,mj AnnVal $2] cs) (FixitySig noExtField (fromOL $ unLoc $3)
-                                (Fixity (fst $ unLoc $2) (snd $ unLoc $2) (unLoc $1)))))
-                     [mj AnnInfix $1,mj AnnVal $2] }
+                                (Fixity (fst $ unLoc $2) (snd $ unLoc $2) (unLoc $1))))) }
 
-        | pattern_synonym_sig   { sLL $1 $> . SigD noExtField . unLoc $ $1 }
+        | pattern_synonym_sig   { reLocA $ sLL $1 $> . SigD noExtField . unLoc $ $1 }
 
         | '{-# COMPLETE' con_list opt_tyconsig  '#-}'
                 {% let (dcolon, tc) = $3
-                   in ams
+                   in acsA
                        (\cs -> sLL $1 $>
-                         (SigD noExtField (CompleteMatchSig (ApiAnn ([ mo $1 ] ++ dcolon ++ [mc $4]) cs) (getCOMPLETE_PRAGs $1) $2 tc)))
-                    ([ mo $1 ] ++ dcolon ++ [mc $4]) }
+                         (SigD noExtField (CompleteMatchSig (ApiAnn ([ mo $1 ] ++ dcolon ++ [mc $4]) cs) (getCOMPLETE_PRAGs $1) $2 tc))) }
 
         -- This rule is for both INLINE and INLINABLE pragmas
         | '{-# INLINE' activation qvar '#-}'
-                {% ams (\cs -> (sLL $1 $> $ SigD noExtField (InlineSig (ApiAnn ((mo $1:fst $2) ++ [mc $4]) cs) $3
+                {% acsA (\cs -> (sLL $1 $> $ SigD noExtField (InlineSig (ApiAnn ((mo $1:fst $2) ++ [mc $4]) cs) $3
                             (mkInlinePragma (getINLINE_PRAGs $1) (getINLINE $1)
-                                            (snd $2)))))
-                       ((mo $1:fst $2) ++ [mc $4]) }
+                                            (snd $2))))) }
 
         | '{-# SCC' qvar '#-}'
-          {% ams (\cs -> sLL $1 $> (SigD noExtField (SCCFunSig (ApiAnn [mo $1, mc $3] cs) (getSCC_PRAGs $1) $2 Nothing)))
-                 [mo $1, mc $3] }
+          {% acsA (\cs -> sLL $1 $> (SigD noExtField (SCCFunSig (ApiAnn [mo $1, mc $3] cs) (getSCC_PRAGs $1) $2 Nothing))) }
 
         | '{-# SCC' qvar STRING '#-}'
           {% do { scc <- getSCC $3
                 ; let str_lit = StringLiteral (getSTRINGs $3) scc
-                ; ams (\cs -> sLL $1 $> (SigD noExtField (SCCFunSig (ApiAnn [mo $1, mc $4] cs) (getSCC_PRAGs $1) $2 (Just ( sL1 $3 str_lit)))))
-                      [mo $1, mc $4] } }
+                ; acsA (\cs -> sLL $1 $> (SigD noExtField (SCCFunSig (ApiAnn [mo $1, mc $4] cs) (getSCC_PRAGs $1) $2 (Just ( sL1 $3 str_lit))))) }}
 
         | '{-# SPECIALISE' activation qvar '::' sigtypes1 '#-}'
-             {% ams (\cs ->
+             {% acsA (\cs ->
                  let inl_prag = mkInlinePragma (getSPEC_PRAGs $1)
                                              (NoUserInline, FunLike) (snd $2)
-                  in sLL $1 $> $ SigD noExtField (SpecSig (ApiAnn (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) cs) $3 (fromOL $5) inl_prag))
-                    (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) }
+                  in sLL $1 $> $ SigD noExtField (SpecSig (ApiAnn (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) cs) $3 (fromOL $5) inl_prag)) }
 
         | '{-# SPECIALISE_INLINE' activation qvar '::' sigtypes1 '#-}'
-             {% ams (\cs -> sLL $1 $> $ SigD noExtField (SpecSig (ApiAnn (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) cs) $3 (fromOL $5)
+             {% acsA (\cs -> sLL $1 $> $ SigD noExtField (SpecSig (ApiAnn (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) cs) $3 (fromOL $5)
                                (mkInlinePragma (getSPEC_INLINE_PRAGs $1)
-                                               (getSPEC_INLINE $1) (snd $2))))
-                       (mo $1:mu AnnDcolon $4:mc $6:(fst $2)) }
+                                               (getSPEC_INLINE $1) (snd $2)))) }
 
         | '{-# SPECIALISE' 'instance' inst_type '#-}'
-                {% ams (\cs -> sLL $1 $>
-                                  $ SigD noExtField (SpecInstSig (ApiAnn [mo $1,mj AnnInstance $2,mc $4] cs) (getSPEC_PRAGs $1) $3))
-                       [mo $1,mj AnnInstance $2,mc $4] }
+                {% acsA (\cs -> sLL $1 $>
+                                  $ SigD noExtField (SpecInstSig (ApiAnn [mo $1,mj AnnInstance $2,mc $4] cs) (getSPEC_PRAGs $1) $3)) }
 
         -- A minimal complete definition
         | '{-# MINIMAL' name_boolformula_opt '#-}'
-            {% ams (\cs -> sLL $1 $> $ SigD noExtField (MinimalSig (ApiAnn [mo $1,mc $3] cs) (getMINIMAL_PRAGs $1) $2))
-                   [mo $1,mc $3] }
+            {% acsA (\cs -> sLL $1 $> $ SigD noExtField (MinimalSig (ApiAnn [mo $1,mc $3] cs) (getMINIMAL_PRAGs $1) $2)) }
 
 activation :: { ([AddApiAnn],Maybe Activation) }
         : {- empty -}                           { ([],Nothing) }
@@ -3954,7 +3961,7 @@ sL0 :: a -> Located a
 sL0 = L noSrcSpan       -- #define L0   L noSrcSpan
 
 {-# INLINE sL1 #-}
-sL1 :: Located a -> b -> Located b
+sL1 :: GenLocated l a -> b -> GenLocated l b
 sL1 x = sL (getLoc x)   -- #define sL1   sL (getLoc $1)
 
 {-# INLINE sL1A #-}

@@ -1123,7 +1123,8 @@ tcInstDecl2 (InstInfo { iSpec = ispec, iBinds = ibinds })
                                   , abs_binds = unitBag dict_bind
                                   , abs_sig = True }
 
-       ; return (unitBag (L loc main_bind) `unionBags` sc_meth_binds)
+       ; return (unitBag (L (noAnnSrcSpan loc) main_bind)
+                  `unionBags` sc_meth_binds)
        }
  where
    dfun_id = instanceDFunId ispec
@@ -1274,7 +1275,7 @@ tcSuperClasses dfun_id cls tyvars dfun_evs inst_tys dfun_ev_binds sc_theta
                                  , abs_ev_binds = [dfun_ev_binds, local_ev_binds]
                                  , abs_binds    = emptyBag
                                  , abs_sig      = False }
-           ; return (sc_top_id, L loc bind, sc_implic) }
+           ; return (sc_top_id, L (noAnnSrcSpan loc) bind, sc_implic) }
 
 -------------------
 checkInstConstraints :: TcM result
@@ -1905,7 +1906,7 @@ mkDefMethBind clas inst_tys sel_id dm_name
               visible_inst_tys = [ ty | (tcb, ty) <- tyConBinders (classTyCon clas) `zip` inst_tys
                                       , tyConBinderArgFlag tcb /= Inferred ]
               rhs  = foldl' mk_vta (nlHsVar dm_name) visible_inst_tys
-              bind = noLoc $ mkTopFunBind Generated fn $
+              bind = noLocA $ mkTopFunBind Generated fn $
                              [mkSimpleMatch (mkPrefixFunRhs fn) [] rhs]
 
         ; liftIO (dumpIfSet_dyn dflags Opt_D_dump_deriv "Filling in method body"

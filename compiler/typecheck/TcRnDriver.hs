@@ -2183,7 +2183,7 @@ tcUserStmt (L loc (BodyStmt _ expr _ _))
               matches   = [mkMatch (mkPrefixFunRhs (L (noAnnSrcSpan loc) fresh_it)) [] rn_expr
                                    (noLoc emptyLocalBinds)]
               -- [it = expr]
-              the_bind  = L loc $ (mkTopFunBind FromSource
+              the_bind  = L (noAnnSrcSpan loc) $ (mkTopFunBind FromSource
                                      (L (noAnnSrcSpan loc) fresh_it) matches)
                                          { fun_ext = fvs }
               -- Care here!  In GHCi the expression might have

@@ -122,7 +122,7 @@ ds_val_bind (NonRecursive, hsbinds) body
         --       could be dict binds in the 'binds'.  (See the notes
         --       below.  Then pattern-match would fail.  Urk.)
   , isUnliftedHsBind bind
-  = putSrcSpanDs loc $
+  = putSrcSpanDs (locA loc) $
      -- see Note [Strict binds checks] in GHC.HsToCore.Binds
     if is_polymorphic bind
     then errDsCoreExpr (poly_bind_err bind)

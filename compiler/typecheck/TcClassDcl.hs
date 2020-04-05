@@ -270,7 +270,7 @@ tcDefMeth clas tyvars this_dict binds_in hs_sig_fn prag_fn
 
              local_dm_ty = instantiateMethod clas global_dm_id (mkTyVarTys tyvars)
 
-             lm_bind     = dm_bind { fun_id = L (noAnnSrcSpan bind_loc) local_dm_name }
+             lm_bind     = dm_bind { fun_id = L bind_loc local_dm_name }
                              -- Substitute the local_meth_name for the binder
                              -- NB: the binding is always a FunBind
 

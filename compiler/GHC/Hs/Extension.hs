@@ -28,12 +28,15 @@ module GHC.Hs.Extension where
 import GhcPrelude
 
 import Data.Data hiding ( Fixity )
+import Data.Function (on)
+import Data.List (sortBy)
 import Data.Semigroup
 import GHC.Types.Name
 import GHC.Types.Name.Reader
 import GHC.Types.Var
 import Outputable hiding ((<>))
-import GHC.Types.SrcLoc (Located, GenLocated(..), RealLocated, SrcSpan, noSrcSpan)
+import GHC.Types.SrcLoc (Located, GenLocated(..), RealLocated, SrcSpan,
+                         noSrcSpan, leftmost_smallest)
 import Lexer (AddApiAnn)
 import ApiAnnotation
 
@@ -261,6 +264,9 @@ data SrcSpanAnn = SrcSpanAnn { ann :: ApiAnn, locA :: SrcSpan }
 
 instance Outputable SrcSpanAnn where
   ppr (SrcSpanAnn a l) = text "SrcSpanAnn" <+> ppr a <+> ppr l
+
+sortLocatedA :: [LocatedA a] -> [LocatedA a]
+sortLocatedA = sortBy (leftmost_smallest `on` getLocA)
 
 -- ---------------------------------------------------------------------
 -- Managing annotations for lists

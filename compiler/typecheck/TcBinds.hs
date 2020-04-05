@@ -479,7 +479,7 @@ tc_group top_lvl sig_fn prag_fn (Recursive, binds) closed thing_inside
         -- See Note [Polymorphic recursion] in HsBinds.
     do  { traceTc "tc_group rec" (pprLHsBinds binds)
         ; whenIsJust mbFirstPatSyn $ \lpat_syn ->
-            recursivePatSynErr (getLoc lpat_syn) binds
+            recursivePatSynErr (locA $ getLoc lpat_syn) binds
         ; (binds1, thing) <- go sccs
         ; return ([(Recursive, binds1)], thing) }
                 -- Rec them all together
@@ -609,7 +609,7 @@ tcPolyBinds sig_fn prag_fn rec_group rec_tc closed bind_list
     ; return result }
   where
     binder_names = collectHsBindListBinders bind_list
-    loc = foldr1 combineSrcSpans (map getLoc bind_list)
+    loc = foldr1 combineSrcSpans (map (locA . getLoc) bind_list)
          -- The mbinds have been dependency analysed and
          -- may no longer be adjacent; so find the narrowest
          -- span that includes them all
@@ -703,7 +703,7 @@ tcPolyCheck prag_fn
             <- checkConstraints skol_info skol_tvs ev_vars $
                tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]  $
                tcExtendNameTyVarEnv tv_prs $
-               setSrcSpan loc           $
+               setSrcSpan (locA loc)       $
                tcMatchesFun (L nm_loc mono_name) matches (mkCheckExpType tau)
 
        ; let prag_sigs = lookupPragEnv prag_fn name
@@ -806,7 +806,7 @@ tcPolyInfer rec_tc prag_fn tc_sig_fn mono bind_list
 
        ; loc <- getSrcSpanM
        ; let poly_ids = map abe_poly exports
-             abs_bind = L loc $
+             abs_bind = L (noAnnSrcSpan loc) $
                         AbsBinds { abs_ext = noExtField
                                  , abs_tvs = qtvs
                                  , abs_ev_vars = givens, abs_ev_binds = [ev_binds]
@@ -1261,7 +1261,7 @@ tcMonoBinds is_rec sig_fn no_gen
         -- and *then* make the monomorphic Id for the LHS
         -- e.g.         f = \(x::forall a. a->a) -> <body>
         --      We want to infer a higher-rank type for f
-    setSrcSpan b_loc    $
+    setSrcSpan (locA b_loc)    $
     do  { ((co_fn, matches'), rhs_ty)
             <- tcInferInst $ \ exp_ty ->
                   -- tcInferInst: see TcUnify,
@@ -1282,7 +1282,7 @@ tcMonoBinds is_rec sig_fn no_gen
                        , mbi_mono_id   = mono_id }]) }
 
 tcMonoBinds _ sig_fn no_gen binds
-  = do  { tc_binds <- mapM (wrapLocM (tcLhs sig_fn no_gen)) binds
+  = do  { tc_binds <- mapM (wrapLocMA (tcLhs sig_fn no_gen)) binds
 
         -- Bring the monomorphic Ids, into scope for the RHSs
         ; let mono_infos = getMonoBindInfo tc_binds
@@ -1299,7 +1299,7 @@ tcMonoBinds _ sig_fn no_gen binds
         ; traceTc "tcMonoBinds" $ vcat [ ppr n <+> ppr id <+> ppr (idType id)
                                        | (n,id) <- rhs_id_env]
         ; binds' <- tcExtendRecIds rhs_id_env $
-                    mapM (wrapLocM tcRhs) tc_binds
+                    mapM (wrapLocMA tcRhs) tc_binds
 
         ; return (listToBag binds', mono_infos) }
 
@@ -1471,7 +1471,7 @@ tcExtendIdBinderStackForRhs infos thing_inside
     -- NotTopLevel: it's a monomorphic binding
 
 ---------------------
-getMonoBindInfo :: [Located TcMonoBind] -> [MonoBindInfo]
+getMonoBindInfo :: [LocatedA TcMonoBind] -> [MonoBindInfo]
 getMonoBindInfo tc_binds
   = foldr (get_info . unLoc) [] tc_binds
   where

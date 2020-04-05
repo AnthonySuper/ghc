@@ -160,10 +160,10 @@ import Data.Kind       ( Type )
 --         *** See Note [The Naming story] in GHC.Hs.Decls ****
 
 mkTyClD :: LTyClDecl (GhcPass p) -> LHsDecl (GhcPass p)
-mkTyClD (L loc d) = L loc (TyClD noExtField d)
+mkTyClD (L loc d) = L (noAnnSrcSpan loc) (TyClD noExtField d)
 
 mkInstD :: LInstDecl (GhcPass p) -> LHsDecl (GhcPass p)
-mkInstD (L loc d) = L loc (InstD noExtField d)
+mkInstD (L loc d) = L (noAnnSrcSpan loc) (InstD noExtField d)
 
 mkClassDecl :: SrcSpan
             -> Located (Maybe (LHsContext GhcPs), LHsType GhcPs)
@@ -257,13 +257,11 @@ mkStandaloneKindSig loc lhs rhs anns =
      ; cs <- addAnnsAt loc []
      ; return $ L loc $ StandaloneKindSig (ApiAnn anns cs) v (mkLHsSigType rhs) }
   where
-    check_lhs_name :: LocatedA RdrName -> P (LocatedA RdrName) -- AZ temp
     check_lhs_name v@(unLoc->name) =
       if isUnqual name && isTcOcc (rdrNameOcc name)
       then return v
       else addFatalError (getLocA v) $
            hang (text "Expected an unqualified type constructor:") 2 (ppr v)
-    check_singular_lhs :: [LocatedA RdrName] -> P (LocatedA RdrName) -- AZ temp
     check_singular_lhs vs =
       case vs of
         [] -> panic "mkStandaloneKindSig: empty left-hand side"
@@ -375,10 +373,10 @@ mkRoleAnnotDecl :: SrcSpan
                 -> [Located (Maybe FastString)]    -- roles
                 -> ApiAnn
                 -> P (LRoleAnnotDecl GhcPs)
-mkRoleAnnotDecl loc tycon roles (ApiAnn anns _)
+mkRoleAnnotDecl loc tycon roles anns
   = do { roles' <- mapM parse_role roles
        ; cs <- addAnnsAt loc []
-       ; return $ L loc $ RoleAnnotDecl (ApiAnn anns cs) tycon roles' }
+       ; return $ L loc $ RoleAnnotDecl (addAnns anns [] cs) tycon roles' }
   where
     role_data_type = dataTypeOf (undefined :: Role)
     all_roles = map fromConstr $ dataTypeConstrs role_data_type
@@ -450,17 +448,17 @@ cvBindsAndSigs fb = go (fromOL fb)
       = do { (bs, ss, ts, tfis, dfis, docs) <- go ds
            ; case decl of
                SigD _ s
-                 -> return (bs, L l s : ss, ts, tfis, dfis, docs)
+                 -> return (bs, L (locA l) s : ss, ts, tfis, dfis, docs)
                TyClD _ (FamDecl _ t)
-                 -> return (bs, ss, L l t : ts, tfis, dfis, docs)
+                 -> return (bs, ss, L (locA l) t : ts, tfis, dfis, docs)
                InstD _ (TyFamInstD { tfid_inst = tfi })
-                 -> return (bs, ss, ts, L l tfi : tfis, dfis, docs)
+                 -> return (bs, ss, ts, L (locA l) tfi : tfis, dfis, docs)
                InstD _ (DataFamInstD { dfid_inst = dfi })
-                 -> return (bs, ss, ts, tfis, L l dfi : dfis, docs)
+                 -> return (bs, ss, ts, tfis, L (locA l) dfi : dfis, docs)
                DocD _ d
-                 -> return (bs, ss, ts, tfis, dfis, L l d : docs)
+                 -> return (bs, ss, ts, tfis, dfis, L (locA l) d : docs)
                SpliceD _ d
-                 -> addFatalError l $
+                 -> addFatalError (locA l) $
                     hang (text "Declaration splices are allowed only" <+>
                           text "at the top level:")
                        2 (ppr d)
@@ -489,20 +487,22 @@ getMonoBind (L loc1 (FunBind { fun_id = fun_id1@(L _ f1)
                                MG { mg_alts = (L _ mtchs1) } }))
             binds
   | has_args mtchs1
-  = go mtchs1 loc1 binds []
+  = go mtchs1 (locA loc1) binds []
   where
+    -- TODO:AZ may have to preserve annotations. Although they should
+    -- only be AnnSemi, and meaningless in this context?
     go mtchs loc
        ((L loc2 (ValD _ (FunBind { fun_id = (L _ f2)
                                  , fun_matches =
                                     MG { mg_alts = (L _ mtchs2) } })))
          : binds) _
         | f1 == f2 = go (mtchs2 ++ mtchs)
-                        (combineSrcSpans loc loc2) binds []
+                        (combineSrcSpans loc (locA loc2)) binds []
     go mtchs loc (doc_decl@(L loc2 (DocD {})) : binds) doc_decls
         = let doc_decls' = doc_decl : doc_decls
-          in go mtchs (combineSrcSpans loc loc2) binds doc_decls'
+          in go mtchs (combineSrcSpans loc (locA loc2)) binds doc_decls'
     go mtchs loc binds doc_decls
-        = ( L loc (makeFunBind fun_id1 (reverse mtchs) noAnn)
+        = ( L (noAnnSrcSpan loc) (makeFunBind fun_id1 (reverse mtchs) noAnn)
           , (reverse doc_decls) ++ binds)
         -- Reverse the final matches, to get it back in the right order
         -- Do the same thing with the trailing doc comments
@@ -623,11 +623,12 @@ mkPatSynMatchGroup (L loc patsyn_name) (L _ decls) =
        ; when (null matches) (wrongNumberErr (locA loc))
        ; return $ mkMatchGroup FromSource matches }
   where
+    fromDecl :: LHsDecl GhcPs -> P (LMatch GhcPs (LHsExpr GhcPs)) -- AZ
     fromDecl (L loc decl@(ValD _ (PatBind _
                          pat@(L _ (ConPatIn _ ln@(L _ name) details))
                                rhs _))) =
         do { unless (name == patsyn_name) $
-               wrongNameBindingErr loc decl
+               wrongNameBindingErr (locA loc) decl
            ; match <- case details of
                PrefixCon pats -> return $ Match { m_ext = noExtField
                                                 , m_ctxt = ctxt, m_pats = pats
@@ -646,9 +647,9 @@ mkPatSynMatchGroup (L loc patsyn_name) (L _ decls) =
                                    , mc_fixity = Infix
                                    , mc_strictness = NoSrcStrict }
 
-               RecCon{} -> recordPatSynErr loc pat
-           ; return $ L loc match }
-    fromDecl (L loc decl) = extraDeclErr loc decl
+               RecCon{} -> recordPatSynErr (locA loc) pat
+           ; return $ L (locA loc) match }
+    fromDecl (L loc decl) = extraDeclErr (locA loc) decl
 
     extraDeclErr loc decl =
         addFatalError loc $

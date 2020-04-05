@@ -590,12 +590,12 @@ instance ToHie (TScoped Type) where
   toHie _ = pure []
 
 instance HasType (LHsBind GhcRn) where
-  getTypeNode (L spn bind) = makeNode bind spn
+  getTypeNode (L spn bind) = makeNode bind (locA spn)
 
 instance HasType (LHsBind GhcTc) where
   getTypeNode (L spn bind) = case bind of
-      FunBind{fun_id = name} -> makeTypeNode bind spn (varType $ unLoc name)
-      _ -> makeNode bind spn
+      FunBind{fun_id = name} -> makeTypeNode bind (locA spn) (varType $ unLoc name)
+      _ -> makeNode bind (locA spn)
 
 instance HasType (Located (Pat GhcRn)) where
   getTypeNode (L spn pat) = makeNode pat spn
@@ -684,11 +684,11 @@ instance ( ToHie (Context (Located (IdP a)))
   toHie (BC context scope b@(L span bind)) =
     concatM $ getTypeNode b : case bind of
       FunBind{fun_id = name, fun_matches = matches} ->
-        [ toHie $ C (ValBind context scope $ getRealSpan span) name
+        [ toHie $ C (ValBind context scope $ getRealSpan (locA span)) name
         , toHie matches
         ]
       PatBind{pat_lhs = lhs, pat_rhs = rhs} ->
-        [ toHie $ PS (getRealSpan span) scope NoScope lhs
+        [ toHie $ PS (getRealSpan (locA span)) scope NoScope lhs
         , toHie rhs
         ]
       VarBind{var_rhs = expr} ->
@@ -699,7 +699,7 @@ instance ( ToHie (Context (Located (IdP a)))
             toHie $ fmap (BC context scope) binds
         ]
       PatSynBind _ psb ->
-        [ toHie $ L span psb -- PatSynBinds only occur at the top level
+        [ toHie $ L (locA span) psb -- PatSynBinds only occur at the top level
         ]
       XHsBindsLR _ -> []
 

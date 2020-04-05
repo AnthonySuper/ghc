@@ -540,7 +540,7 @@ zonkMonoBinds :: ZonkEnv -> LHsBinds GhcTcId -> TcM (LHsBinds GhcTc)
 zonkMonoBinds env binds = mapBagM (zonk_lbind env) binds
 
 zonk_lbind :: ZonkEnv -> LHsBind GhcTcId -> TcM (LHsBind GhcTc)
-zonk_lbind env = wrapLocM (zonk_bind env)
+zonk_lbind env = wrapLocMA (zonk_bind env)
 
 zonk_bind :: ZonkEnv -> HsBind GhcTcId -> TcM (HsBind GhcTc)
 zonk_bind env bind@(PatBind { pat_lhs = pat, pat_rhs = grhss

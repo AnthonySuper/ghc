@@ -314,9 +314,9 @@ getModInfo name = do
 processAllTypeCheckedModule :: forall m . GhcMonad m => TypecheckedModule
                             -> m [SpanInfo]
 processAllTypeCheckedModule tcm = do
-    bts <- mapM getTypeLHsBind $ listifyAllSpans tcs
-    ets <- mapM getTypeLHsExpr $ listifyAllSpans tcs
-    pts <- mapM getTypeLPat    $ listifyAllSpans tcs
+    bts <- mapM (getTypeLHsBind . reLocA) $ listifyAllSpans tcs
+    ets <- mapM getTypeLHsExpr            $ listifyAllSpans tcs
+    pts <- mapM getTypeLPat               $ listifyAllSpans tcs
     return $ mapMaybe toSpanInfo
            $ sortBy cmpSpan
            $ catMaybes (bts ++ ets ++ pts)

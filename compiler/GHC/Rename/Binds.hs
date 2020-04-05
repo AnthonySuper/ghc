@@ -283,7 +283,7 @@ rnValBindsLHS :: NameMaker
               -> HsValBinds GhcPs
               -> RnM (HsValBindsLR GhcRn GhcPs)
 rnValBindsLHS topP (ValBinds x mbinds sigs)
-  = do { mbinds' <- mapBagM (wrapLocM (rnBindLHS topP doc)) mbinds
+  = do { mbinds' <- mapBagM (wrapLocMA (rnBindLHS topP doc)) mbinds
        ; return $ ValBinds x mbinds' sigs }
   where
     bndrs = collectHsBindsBinders mbinds
@@ -451,7 +451,7 @@ rnLBind :: (Name -> [Name])      -- Signature tyvar function
         -> LHsBindLR GhcRn GhcPs
         -> RnM (LHsBind GhcRn, [Name], Uses)
 rnLBind sig_fn (L loc bind)
-  = setSrcSpan loc $
+  = setSrcSpan (locA loc) $
     do { (bind', bndrs, dus) <- rnBind sig_fn bind
        ; return (L loc bind', bndrs, dus) }
 
@@ -900,7 +900,7 @@ rnMethodBindLHS :: Bool -> Name
                 -> LHsBindsLR GhcRn GhcPs
                 -> RnM (LHsBindsLR GhcRn GhcPs)
 rnMethodBindLHS _ cls (L loc bind@(FunBind { fun_id = name })) rest
-  = setSrcSpan loc $ do
+  = setSrcSpan (locA loc) $ do
     do { sel_name <- wrapLocMA (lookupInstDeclBndr cls (text "method")) name
                      -- We use the selector name as the binder
        ; let bind' = bind { fun_id = sel_name, fun_ext = noAnn }
@@ -909,7 +909,7 @@ rnMethodBindLHS _ cls (L loc bind@(FunBind { fun_id = name })) rest
 -- Report error for all other forms of bindings
 -- This is why we use a fold rather than map
 rnMethodBindLHS is_cls_decl _ (L loc bind) rest
-  = do { addErrAt loc $
+  = do { addErrAt (locA loc) $
          vcat [ what <+> text "not allowed in" <+> decl_sort
               , nest 2 (ppr bind) ]
        ; return rest }

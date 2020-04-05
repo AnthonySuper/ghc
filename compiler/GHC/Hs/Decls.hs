@@ -130,7 +130,7 @@ import Data.Data        hiding (TyCon,Fixity, Infix)
 ************************************************************************
 -}
 
-type LHsDecl p = Located (HsDecl p)
+type LHsDecl p = LocatedA (HsDecl p)
         -- ^ When in a list this may have
         --
         --  - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnSemi'
@@ -1209,7 +1209,6 @@ pprFamilyDecl top_level (FamilyDecl { fdInfo = info, fdLName = ltycon
     pp_inj = case mb_inj of
                Just (L _ (InjectivityAnn _ lhs rhs)) ->
                  hsep [ vbar, ppr lhs, text "->", hsep (map ppr rhs) ]
-               Just (L _ (XInjectivityAnn nec)) -> noExtCon nec
                Nothing -> empty
     (pp_where, pp_eqns) = case info of
       ClosedTypeFamily mb_eqns ->
@@ -2497,7 +2496,7 @@ data AnnDecl pass = HsAnnotation
       -- For details on above see note [Api annotations] in ApiAnnotation
   | XAnnDecl (XXAnnDecl pass)
 
-type instance XHsAnnotation (GhcPass _) = NoExtField
+type instance XHsAnnotation (GhcPass _) = ApiAnn
 type instance XXAnnDecl     (GhcPass _) = NoExtCon
 
 instance (OutputableBndrId p) => Outputable (AnnDecl (GhcPass p)) where

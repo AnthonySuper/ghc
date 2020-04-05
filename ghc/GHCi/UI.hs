@@ -1235,8 +1235,8 @@ runStmt input step = do
     run_decls :: GhciMonad m => [LHsDecl GhcPs] -> m (Maybe GHC.ExecResult)
     -- Only turn `FunBind` and `VarBind` into statements, other bindings
     -- (e.g. `PatBind`) need to stay as decls.
-    run_decls [L l (ValD _ bind@FunBind{})] = run_stmt (mk_stmt l bind)
-    run_decls [L l (ValD _ bind@VarBind{})] = run_stmt (mk_stmt l bind)
+    run_decls [L l (ValD _ bind@FunBind{})] = run_stmt (mk_stmt (locA l) bind)
+    run_decls [L l (ValD _ bind@VarBind{})] = run_stmt (mk_stmt (locA l) bind)
     -- Note that any `x = y` declarations below will be run as declarations
     -- instead of statements (e.g. `...; x = y; ...`)
     run_decls decls = do
@@ -1252,8 +1252,9 @@ runStmt input step = do
 
     mk_stmt :: SrcSpan -> HsBind GhcPs -> GhciLStmt GhcPs
     mk_stmt loc bind =
-      let l = L loc
-      in l (LetStmt noExtField (l (HsValBinds noExtField (ValBinds noExtField (unitBag (l bind)) []))))
+      let l  = L loc
+          la = L (noAnnSrcSpan loc)
+      in l (LetStmt noExtField (l (HsValBinds noExtField (ValBinds noExtField (unitBag (la bind)) []))))
 
 -- | Clean up the GHCi environment after a statement has run
 afterRunStmt :: GhciMonad m
