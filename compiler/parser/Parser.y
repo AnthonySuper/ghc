@@ -1545,8 +1545,6 @@ decls_cls :: { Located ([AddApiAnn],OrdList (LHsDecl GhcPs)) }  -- Reversed
                                                   t' <- addAnnotationA t AnnSemi (gl $2)
                                                   return (sLL $1 $> (fst $ unLoc $1
                                                                  , snocOL hs t')) }
--- AZ working above
-
           | decl_cls                    { sL1A $1 ([], unitOL $1) }
           | {- empty -}                 { noLoc ([],nilOL) }
 
@@ -1738,9 +1736,8 @@ rule_vars :: { [LRuleTyTmVar] }
         | {- empty -}                           { [] }
 
 rule_var :: { LRuleTyTmVar }
-        : varid                         { sL1A $1 (RuleTyTmVar $1 Nothing) }
-        | '(' varid '::' ctype ')'      {% ams (\_ -> sLL $1 $> (RuleTyTmVar $2 (Just $4)))
-                                               [mop $1,mu AnnDcolon $3,mcp $5] }
+        : varid                         { sL1A $1 (RuleTyTmVar noAnn $1 Nothing) }
+        | '(' varid '::' ctype ')'      {% acs (\cs -> sLL $1 $> (RuleTyTmVar (ApiAnn [mop $1,mu AnnDcolon $3,mcp $5] cs) $2 (Just $4))) }
 
 {- Note [Parsing explicit foralls in Rules]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1768,33 +1765,47 @@ to varid (used for rule_vars), 'checkRuleTyVarBndrNames' must be updated.
 -- Warnings and deprecations (c.f. rules)
 
 warnings :: { OrdList (LWarnDecl GhcPs) }
-        : warnings ';' warning         {% addAnnotation (oll $1) AnnSemi (gl $2)
-                                          >> return ($1 `appOL` $3) }
-        | warnings ';'                 {% addAnnotation (oll $1) AnnSemi (gl $2)
-                                          >> return $1 }
+        : warnings ';' warning         {% if isNilOL $1
+                                           then return ($1 `appOL` $3)
+                                           else case unsnocOL $1 of
+                                             (hs,t) -> do
+                                              t' <- addAnnotationA t AnnSemi (gl $2)
+                                              return (snocOL hs t' `appOL` $3) }
+        | warnings ';'                 {% if isNilOL $1
+                                           then return $1
+                                           else case unsnocOL $1 of
+                                             (hs,t) -> do
+                                              t' <- addAnnotationA t AnnSemi (gl $2)
+                                              return (snocOL hs t') }
         | warning                      { $1 }
         | {- empty -}                  { nilOL }
 
 -- SUP: TEMPORARY HACK, not checking for `module Foo'
 warning :: { OrdList (LWarnDecl GhcPs) }
         : namelist strings
-                {% amsu (\_ -> sLL $1 $> (Warning noExtField (unLoc $1) (WarningTxt (noLoc NoSourceText) $ snd $ unLoc $2)))
-                     (fst $ unLoc $2) }
+                {% fmap unitOL $ acsA (\cs -> sLL $1 $> (Warning (ApiAnn (fst $ unLoc $2) cs) (unLoc $1) (WarningTxt (noLoc NoSourceText) $ snd $ unLoc $2))) }
 
 deprecations :: { OrdList (LWarnDecl GhcPs) }
         : deprecations ';' deprecation
-                                       {% addAnnotation (oll $1) AnnSemi (gl $2)
-                                          >> return ($1 `appOL` $3) }
-        | deprecations ';'             {% addAnnotation (oll $1) AnnSemi (gl $2)
-                                          >> return $1 }
+                                       {% if isNilOL $1
+                                           then return ($1 `appOL` $3)
+                                           else case unsnocOL $1 of
+                                             (hs,t) -> do
+                                              t' <- addAnnotationA t AnnSemi (gl $2)
+                                              return (snocOL hs t' `appOL` $3) }
+        | deprecations ';'             {% if isNilOL $1
+                                           then return $1
+                                           else case unsnocOL $1 of
+                                             (hs,t) -> do
+                                              t' <- addAnnotationA t AnnSemi (gl $2)
+                                              return (snocOL hs t') }
         | deprecation                  { $1 }
         | {- empty -}                  { nilOL }
 
 -- SUP: TEMPORARY HACK, not checking for `module Foo'
 deprecation :: { OrdList (LWarnDecl GhcPs) }
         : namelist strings
-             {% amsu (\_ -> sLL $1 $> $ (Warning noExtField (unLoc $1) (DeprecatedTxt (noLoc NoSourceText) $ snd $ unLoc $2)))
-                     (fst $ unLoc $2) }
+             {% fmap unitOL $ acsA (\cs -> sLL $1 $> $ (Warning (ApiAnn (fst $ unLoc $2) cs) (unLoc $1) (DeprecatedTxt (noLoc NoSourceText) $ snd $ unLoc $2))) }
 
 strings :: { Located ([AddApiAnn],[Located StringLiteral]) }
     : STRING { sL1 $1 ([],[L (gl $1) (getStringLiteral $1)]) }
@@ -1885,16 +1896,17 @@ sigtypedoc :: { LHsType GhcPs }
 
 
 sig_vars :: { Located [LocatedA RdrName] }    -- Returned in reversed order
-         : sig_vars ',' var           {% addAnnotation (glA $ head $ unLoc $1)
-                                                       AnnComma (gl $2)
-                                         >> return (sLLlA $1 $> ($3 : unLoc $1)) }
+         : sig_vars ',' var           {% case unLoc $1 of
+                                           [] -> return (sLLlA $1 $> ($3 : unLoc $1))
+                                           (h:t) -> do
+                                             h' <- addAnnotationA h AnnComma (gl $2)
+                                             return (sLLlA $1 $> ($3 : h' : t)) }
          | var                        { sL1A $1 [$1] }
 
-sigtypes1 :: { (OrdList (LHsSigType GhcPs)) }
+sigtypes1 :: { OrdList (LHsSigType GhcPs) }
    : sigtype                 { unitOL (mkLHsSigType $1) }
-   | sigtype ',' sigtypes1   {% addAnnotation (gl $1) AnnComma (gl $2)
-                                >> return (unitOL (mkLHsSigType $1) `appOL` $3) }
-
+   | sigtype ',' sigtypes1   {% do { st <- mkLHsSigTypeA [mj AnnComma $2] $1
+                                   ; return $ unitOL st `appOL` $3 } }
 -----------------------------------------------------------------------------
 -- Types
 
@@ -1909,33 +1921,28 @@ forall_vis_flag :: { (AddApiAnn, ForallVisFlag) }
 -- A ktype/ktypedoc is a ctype/ctypedoc, possibly with a kind annotation
 ktype :: { LHsType GhcPs }
         : ctype                { $1 }
-        | ctype '::' kind      {% ams (\cs -> sLL $1 $> $ HsKindSig (ApiAnn [mu AnnDcolon $2] cs) $1 $3)
-                                      [mu AnnDcolon $2] }
+        | ctype '::' kind      {% acs (\cs -> sLL $1 $> $ HsKindSig (ApiAnn [mu AnnDcolon $2] cs) $1 $3) }
 
 ktypedoc :: { LHsType GhcPs }
          : ctypedoc            { $1 }
-         | ctypedoc '::' kind  {% ams (\cs -> sLL $1 $> $ HsKindSig (ApiAnn [mu AnnDcolon $2] cs) $1 $3)
-                                      [mu AnnDcolon $2] }
+         | ctypedoc '::' kind  {% acs (\cs -> sLL $1 $> $ HsKindSig (ApiAnn [mu AnnDcolon $2] cs) $1 $3) }
 
 -- A ctype is a for-all type
 ctype   :: { LHsType GhcPs }
         : 'forall' tv_bndrs forall_vis_flag ctype
                                         {% let (fv_ann, fv_flag) = $3 in
                                            hintExplicitForall $1 *>
-                                           ams (\cs -> sLL $1 $> $
+                                           acs (\cs -> sLL $1 $> $
                                                 HsForAllTy { hst_fvf = fv_flag
                                                            , hst_bndrs = $2
                                                            , hst_xforall = ApiAnn [mu AnnForall $1,fv_ann] cs
-                                                           , hst_body = $4 })
-                                               [mu AnnForall $1,fv_ann] }
-        | context '=>' ctype          {% do { ctxs <- amsA $1 [mu AnnDarrow $2]
-                                            ; return (sLLAl $1 $> $
+                                                           , hst_body = $4 }) }
+        | context '=>' ctype          {% acs (\cs -> (sLLAl $1 $> $
                                             HsQualTy { hst_ctxt = $1
-                                                     , hst_xqual = ApiAnn [mu AnnDarrow $2] noCom
-                                                     , hst_body = $3 })} }
+                                                     , hst_xqual = ApiAnn [mu AnnDarrow $2] cs
+                                                     , hst_body = $3 })) }
 
-        | ipvar '::' type             {% ams (\cs -> sLL $1 $> (HsIParamTy (ApiAnn [mu AnnDcolon $2] cs) $1 $3))
-                                             [mu AnnDcolon $2] }
+        | ipvar '::' type             {% acs (\cs -> sLL $1 $> (HsIParamTy (ApiAnn [mu AnnDcolon $2] cs) $1 $3)) }
         | type                        { $1 }
 
 -- Note [ctype and ctypedoc]
@@ -1953,19 +1960,16 @@ ctypedoc :: { LHsType GhcPs }
         : 'forall' tv_bndrs forall_vis_flag ctypedoc
                                          {% let (fv_ann, fv_flag) = $3 in
                                             hintExplicitForall $1 *>
-                                            ams (\cs -> sLL $1 $> $
+                                            acs (\cs -> sLL $1 $> $
                                                  HsForAllTy { hst_fvf = fv_flag
                                                             , hst_bndrs = $2
                                                             , hst_xforall = ApiAnn [mu AnnForall $1,fv_ann] cs
-                                                            , hst_body = $4 })
-                                                [mu AnnForall $1,fv_ann] }
-        | context '=>' ctypedoc       {% do { ctxs <- amsA $1 [mu AnnDarrow $2]
-                                            ; return (sLLAl $1 $> $
+                                                            , hst_body = $4 }) }
+        | context '=>' ctypedoc       {% acs (\cs -> (sLLAl $1 $> $
                                             HsQualTy { hst_ctxt = $1
-                                                     , hst_xqual = ApiAnn [mu AnnDarrow $2] noCom
-                                                     , hst_body = $3 }) }}
-        | ipvar '::' type             {% ams (\cs -> sLL $1 $> (HsIParamTy (ApiAnn [mu AnnDcolon $2] cs) $1 $3))
-                                             [mu AnnDcolon $2] }
+                                                     , hst_xqual = ApiAnn [mu AnnDarrow $2] cs
+                                                     , hst_body = $3 }) )}
+        | ipvar '::' type             {% acs (\cs -> sLL $1 $> (HsIParamTy (ApiAnn [mu AnnDcolon $2] cs) $1 $3)) }
         | typedoc                     { $1 }
 
 ----------------------
@@ -2012,8 +2016,8 @@ is connected to the first type too.
 type :: { LHsType GhcPs }
         : btype                        { $1 }
         | btype '->' ctype             {% ams (\_ -> $1) [mu AnnRarrow $2] -- See note [GADT decl discards annotations]
-                                       >> ams (\cs -> sLL $1 $> $ HsFunTy (ApiAnn [mu AnnRarrow $2] cs) $1 $3)
-                                              [mu AnnRarrow $2] }
+                                       >> acs (\cs -> sLL $1 $> $ HsFunTy (ApiAnn [mu AnnRarrow $2] cs) $1 $3) }
+-- AZ working above
 
 
 typedoc :: { LHsType GhcPs }
@@ -2021,20 +2025,17 @@ typedoc :: { LHsType GhcPs }
         | btype docprev                  { sLL $1 $> $ HsDocTy (ApiAnn [] noCom) $1 $2 }
         | docnext btype                  { sLL $1 $> $ HsDocTy (ApiAnn [] noCom) $2 $1 }
         | btype '->'     ctypedoc        {% ams (\_ -> $1) [mu AnnRarrow $2] -- See note [GADT decl discards annotations]
-                                         >> ams (\cs -> sLL $1 $> $ HsFunTy (ApiAnn [mu AnnRarrow $2] cs) $1 $3)
-                                                [mu AnnRarrow $2] }
+                                         >> acs (\cs -> sLL $1 $> $ HsFunTy (ApiAnn [mu AnnRarrow $2] cs) $1 $3) }
         | btype docprev '->' ctypedoc    {% ams (\_ -> $1) [mu AnnRarrow $3] -- See note [GADT decl discards annotations]
-                                         >> ams (\cs -> sLL $1 $> $
+                                         >> acs (\cs -> sLL $1 $> $
                                                  HsFunTy (ApiAnn [mu AnnRarrow $3] cs) (L (comb2 $1 $2)
                                                             (HsDocTy noAnn $1 $2))
-                                                         $4)
-                                                [mu AnnRarrow $3] }
+                                                         $4) }
         | docnext btype '->' ctypedoc    {% ams (\_ -> $2) [mu AnnRarrow $3] -- See note [GADT decl discards annotations]
-                                         >> ams (\cs -> sLL $1 $> $
+                                         >> acs (\cs -> sLL $1 $> $
                                                  HsFunTy (ApiAnn [mu AnnRarrow $3] cs) (L (comb2 $1 $2)
                                                             (HsDocTy noAnn $2 $1))
-                                                         $4)
-                                                [mu AnnRarrow $3] }
+                                                         $4) }
 
 -- See Note [Constr variations of non-terminals]
 constr_btype :: { LHsType GhcPs }
@@ -2081,19 +2082,19 @@ atype :: { LHsType GhcPs }
         | PREFIX_TILDE atype             {% ams (\cs -> sLL $1 $> (mkBangTy (ApiAnn [mj AnnTilde $1] cs) SrcLazy $2)) [mj AnnTilde $1] }
         | PREFIX_BANG  atype             {% ams (\cs -> sLL $1 $> (mkBangTy (ApiAnn [mj AnnBang $1] cs) SrcStrict $2)) [mj AnnBang $1] }
 
-        | '{' fielddecls '}'             {% amms (checkRecordSyntax
-                                                    (sLL $1 $> $ HsRecTy (ApiAnn [moc $1,mcc $3] noCom) $2))
+        | '{' fielddecls '}'             {% do { decls <- acs (\cs -> (sLL $1 $> $ HsRecTy (ApiAnn [moc $1,mcc $3] cs) $2))
+                                               ; checkRecordSyntax decls }}
                                                         -- Constructor sigs only
-                                                 [moc $1,mcc $3] }
-        | '(' ')'                        {% ams (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mop $1,mcp $2] cs)
-                                                    HsBoxedOrConstraintTuple [])
-                                                [mop $1,mcp $2] }
+        | '(' ')'                        {% acs (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mop $1,mcp $2] cs)
+                                                    HsBoxedOrConstraintTuple []) }
         | '(' ktype ',' comma_types1 ')' {% addAnnotation (gl $2) AnnComma
                                                           (gl $3) >>
                                             ams (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mop $1,mcp $5] cs)
 
                                              HsBoxedOrConstraintTuple ($2 : $4))
                                                 [mop $1,mcp $5] }
+-- AZ working above
+
         | '(#' '#)'                   {% ams (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mo $1,mc $2] cs) HsUnboxedTuple [])
                                              [mo $1,mc $2] }
         | '(#' comma_types1 '#)'      {% ams (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mo $1,mc $3] cs) HsUnboxedTuple $2)
@@ -2161,10 +2162,8 @@ tv_bndrs :: { [LHsTyVarBndr GhcPs] }
          | {- empty -}                  { [] }
 
 tv_bndr :: { LHsTyVarBndr GhcPs }
-        : tyvar                         { sL1A $1 (UserTyVar noExtField $1) }
-        | '(' tyvar '::' kind ')'       {% ams (\_ -> sLL $1 $>  (KindedTyVar noExtField $2 $4))
-                                               [mop $1,mu AnnDcolon $3
-                                               ,mcp $5] }
+        : tyvar                         { sL1A $1 (UserTyVar noAnn $1) }
+        | '(' tyvar '::' kind ')'       {% acs (\cs -> sLL $1 $>  (KindedTyVar (ApiAnn [mop $1,mu AnnDcolon $3,mcp $5] cs) $2 $4)) }
 
 fds :: { Located ([AddApiAnn],[Located (FunDep (LocatedA RdrName))]) }
         : {- empty -}                   { noLoc ([],[]) }

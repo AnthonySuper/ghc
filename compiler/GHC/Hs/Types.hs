@@ -372,7 +372,7 @@ data HsImplicitBndrs pass thing   -- See Note [HsType binders]
     }
   | XHsImplicitBndrs (XXHsImplicitBndrs pass thing)
 
-type instance XHsIB              GhcPs _ = NoExtField
+type instance XHsIB              GhcPs _ = ApiAnn
 type instance XHsIB              GhcRn _ = [Name]
 type instance XHsIB              GhcTc _ = [Name]
 
@@ -446,7 +446,7 @@ the explicitly forall'd tyvar 'a' is bound by the HsForAllTy
 -}
 
 mkHsImplicitBndrs :: thing -> HsImplicitBndrs GhcPs thing
-mkHsImplicitBndrs x = HsIB { hsib_ext  = noExtField
+mkHsImplicitBndrs x = HsIB { hsib_ext  = noAnn
                            , hsib_body = x }
 
 mkHsWildCardBndrs :: thing -> HsWildCardBndrs GhcPs thing
@@ -502,8 +502,8 @@ data HsTyVarBndr pass
   | XTyVarBndr
       (XXTyVarBndr pass)
 
-type instance XUserTyVar    (GhcPass _) = NoExtField
-type instance XKindedTyVar  (GhcPass _) = NoExtField
+type instance XUserTyVar    (GhcPass _) = ApiAnn
+type instance XKindedTyVar  (GhcPass _) = ApiAnn
 
 type instance XXTyVarBndr   (GhcPass _) = NoExtCon
 

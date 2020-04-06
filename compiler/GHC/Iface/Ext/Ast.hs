@@ -1834,7 +1834,7 @@ instance ToHie (LWarnDecls GhcRn) where
       XWarnDecls nec -> noExtCon nec
 
 instance ToHie (LWarnDecl GhcRn) where
-  toHie (L span decl) = concatM $ makeNode decl span : case decl of
+  toHie (L span decl) = concatM $ makeNode decl (locA span) : case decl of
       Warning _ vars _ ->
         [ toHie $ map (C Use) vars
         ]

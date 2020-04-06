@@ -2446,7 +2446,7 @@ getGhciStepIO = do
 
         step_ty = noLoc $ HsForAllTy
                      { hst_fvf = ForallInvis
-                     , hst_bndrs = [noLoc $ UserTyVar noExtField (noLocA a_tv)]
+                     , hst_bndrs = [noLoc $ UserTyVar noAnn (noLocA a_tv)]
                      , hst_xforall = noAnn
                      , hst_body  = nlHsFunTy ghciM ioM }
 

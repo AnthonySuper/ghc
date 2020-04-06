@@ -722,7 +722,7 @@ typeToLHsType ty
              head (zip args arg_flags)
 
     go_tv :: TyVar -> LHsTyVarBndr GhcPs
-    go_tv tv = noLoc $ KindedTyVar noExtField (noLocA (getRdrName tv))
+    go_tv tv = noLoc $ KindedTyVar noAnn (noLocA (getRdrName tv))
                                    (go (tyVarKind tv))
 
 {-

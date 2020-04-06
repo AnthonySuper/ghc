@@ -2351,8 +2351,8 @@ data RuleBndr pass
 
         -- For details on above see note [Api annotations] in ApiAnnotation
 
-type instance XCRuleBndr    (GhcPass _) = NoExtField
-type instance XRuleBndrSig  (GhcPass _) = NoExtField
+type instance XCRuleBndr    (GhcPass _) = ApiAnn
+type instance XRuleBndrSig  (GhcPass _) = ApiAnn
 type instance XXRuleBndr    (GhcPass _) = NoExtCon
 
 collectRuleBndrSigTys :: [RuleBndr pass] -> [LHsSigWcType pass]
@@ -2448,13 +2448,13 @@ type instance XWarnings      GhcTc = NoExtField
 type instance XXWarnDecls    (GhcPass _) = NoExtCon
 
 -- | Located Warning pragma Declaration
-type LWarnDecl pass = Located (WarnDecl pass)
+type LWarnDecl pass = LocatedA (WarnDecl pass)
 
 -- | Warning pragma Declaration
 data WarnDecl pass = Warning (XWarning pass) [LocatedA (IdP pass)] WarningTxt
                    | XWarnDecl (XXWarnDecl pass)
 
-type instance XWarning      (GhcPass _) = NoExtField
+type instance XWarning      (GhcPass _) = ApiAnn
 type instance XXWarnDecl    (GhcPass _) = NoExtCon
 
 

@@ -293,7 +293,7 @@ rnSrcWarnDecls bndr_set decls'
        ; mapM_ (\ dups -> let ((L loc rdr) :| (lrdr':_)) = dups
                           in addErrAt (locA loc) (dupWarnDecl lrdr' rdr))
                warn_rdr_dups
-       ; pairs_s <- mapM (addLocM rn_deprec) decls
+       ; pairs_s <- mapM (addLocMA rn_deprec) decls
        ; return (WarnSome ((concat pairs_s))) }
  where
    decls = concatMap (wd_warnings . unLoc) decls'
@@ -1049,13 +1049,13 @@ bindRuleTmVars doc tyvs vars names thing_inside
   where
     go ((L l (RuleBndr _ (L loc _))) : vars) (n : ns) thing_inside
       = go vars ns $ \ vars' ->
-        thing_inside (L l (RuleBndr noExtField (L loc n)) : vars')
+        thing_inside (L l (RuleBndr noAnn (L loc n)) : vars')
 
     go ((L l (RuleBndrSig _ (L loc _) bsig)) : vars)
        (n : ns) thing_inside
       = rnHsSigWcTypeScoped bind_free_tvs doc bsig $ \ bsig' ->
         go vars ns $ \ vars' ->
-        thing_inside (L l (RuleBndrSig noExtField (L loc n) bsig') : vars')
+        thing_inside (L l (RuleBndrSig noAnn (L loc n) bsig') : vars')
 
     go [] [] thing_inside = thing_inside []
     go vars names _ = pprPanic "bindRuleVars" (ppr vars $$ ppr names)

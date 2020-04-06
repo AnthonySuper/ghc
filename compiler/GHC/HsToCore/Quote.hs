@@ -318,7 +318,7 @@ repTopDs group@(HsGroup { hs_valds   = valds
     no_default_decl (L loc decl)
       = notHandledL loc "Default declarations" (ppr decl)
     no_warn (L loc (Warning _ thing _))
-      = notHandledL loc "WARNING and DEPRECATION pragmas" $
+      = notHandledL (locA loc) "WARNING and DEPRECATION pragmas" $
                     text "Pragma for declaration of" <+> ppr thing
     no_warn (L _ (XWarnDecl nec)) = noExtCon nec
     no_doc (L loc _)

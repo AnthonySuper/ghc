@@ -26,7 +26,7 @@ module   RdrHsSyn (
         mkTySynonym, mkTyFamInstEqn,
         mkStandaloneKindSig,
         mkTyFamInst,
-        mkFamDecl, mkLHsSigType,
+        mkFamDecl, mkLHsSigType, mkLHsSigTypeA,
         mkInlinePragma,
         mkPatSynMatchGroup,
         mkRecConstrOrUpdate, -- HsExp -> [HsFieldUpdate] -> P HsExp
@@ -346,6 +346,11 @@ mkFamDecl loc info lhs ksig injAnn annsIn
                         DataFamily          -> empty
                         OpenTypeFamily      -> empty
                         ClosedTypeFamily {} -> whereDots
+
+mkLHsSigTypeA :: [AddApiAnn] -> LHsType GhcPs -> P (LHsSigType GhcPs)
+mkLHsSigTypeA anns typ = do
+  cs <- addAnnsAt (getLoc typ) []
+  return $ (mkLHsSigType typ) { hsib_ext = ApiAnn anns cs }
 
 mkSpliceDecl :: LHsExpr GhcPs -> HsDecl GhcPs
 -- If the user wrote
@@ -850,9 +855,9 @@ checkTyVars pp_what equals_or_where tc tparms
         -- Check that the name space is correct!
     chk :: LHsType GhcPs -> P (LHsTyVarBndr GhcPs)
     chk (L l (HsKindSig _ (L _ (HsTyVar _ _ (L lv tv))) k))
-        | isRdrTyVar tv    = return (L l (KindedTyVar noExtField (L lv tv) k))
+        | isRdrTyVar tv    = return (L l (KindedTyVar noAnn (L lv tv) k))
     chk (L l (HsTyVar _ _ (L ltv tv)))
-        | isRdrTyVar tv    = return (L l (UserTyVar noExtField (L ltv tv)))
+        | isRdrTyVar tv    = return (L l (UserTyVar noAnn (L ltv tv)))
     chk t@(L loc _)
         = addFatalError loc $
                 vcat [ text "Unexpected type" <+> quotes (ppr t)
@@ -888,22 +893,22 @@ checkDatatypeContext (Just c)
                   <+> pprLHsContext c)
 
 type LRuleTyTmVar = Located RuleTyTmVar
-data RuleTyTmVar = RuleTyTmVar (LocatedA RdrName) (Maybe (LHsType GhcPs))
+data RuleTyTmVar = RuleTyTmVar ApiAnn (LocatedA RdrName) (Maybe (LHsType GhcPs))
 -- ^ Essentially a wrapper for a @RuleBndr GhcPs@
 
 -- turns RuleTyTmVars into RuleBnrs - this is straightforward
 mkRuleBndrs :: [LRuleTyTmVar] -> [LRuleBndr GhcPs]
 mkRuleBndrs = fmap (fmap cvt_one)
-  where cvt_one (RuleTyTmVar v Nothing)    = RuleBndr    noExtField v
-        cvt_one (RuleTyTmVar v (Just sig)) =
-          RuleBndrSig noExtField v (mkLHsSigWcType sig)
+  where cvt_one (RuleTyTmVar ann v Nothing) = RuleBndr ann v
+        cvt_one (RuleTyTmVar ann v (Just sig)) =
+          RuleBndrSig ann v (mkLHsSigWcType sig)
 
 -- turns RuleTyTmVars into HsTyVarBndrs - this is more interesting
 mkRuleTyVarBndrs :: [LRuleTyTmVar] -> [LHsTyVarBndr GhcPs]
 mkRuleTyVarBndrs = fmap (fmap cvt_one)
-  where cvt_one (RuleTyTmVar v Nothing)    = UserTyVar   noExtField (fmap tm_to_ty v)
-        cvt_one (RuleTyTmVar v (Just sig))
-          = KindedTyVar noExtField (fmap tm_to_ty v) sig
+  where cvt_one (RuleTyTmVar ann v Nothing) = UserTyVar ann (fmap tm_to_ty v)
+        cvt_one (RuleTyTmVar ann v (Just sig))
+          = KindedTyVar ann (fmap tm_to_ty v) sig
     -- takes something in namespace 'varName' to something in namespace 'tvName'
         tm_to_ty (Unqual occ) = Unqual (setOccNameSpace tvName occ)
         tm_to_ty _ = panic "mkRuleTyVarBndrs"
