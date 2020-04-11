@@ -187,7 +187,7 @@ mkHsApp e1 e2 = addCLoc e1 e2 (HsApp noComments e1 e2)
 
 mkHsAppType :: (NoGhcTc (GhcPass id) ~ GhcRn)
             => LHsExpr (GhcPass id) -> LHsWcType GhcRn -> LHsExpr (GhcPass id)
-mkHsAppType e t = addCLoc e t_body (HsAppType noComments e paren_wct)
+mkHsAppType e t = reLoc $ addCLocA t_body e (HsAppType noComments e paren_wct)
   where
     t_body    = hswc_body t
     paren_wct = t { hswc_body = parenthesizeHsType appPrec t_body }
@@ -499,31 +499,31 @@ nlHsTyVar :: IdP (GhcPass p)                            -> LHsType (GhcPass p)
 nlHsFunTy :: LHsType (GhcPass p) -> LHsType (GhcPass p) -> LHsType (GhcPass p)
 nlHsParTy :: LHsType (GhcPass p)                        -> LHsType (GhcPass p)
 
-nlHsAppTy f t = noLoc (HsAppTy noExtField f (parenthesizeHsType appPrec t))
-nlHsTyVar x   = noLoc (HsTyVar noAnn NotPromoted (noLocA x))
-nlHsFunTy a b = noLoc (HsFunTy noAnn (parenthesizeHsType funPrec a) b)
-nlHsParTy t   = noLoc (HsParTy noAnn t)
+nlHsAppTy f t = noLocA (HsAppTy noExtField f (parenthesizeHsType appPrec t))
+nlHsTyVar x   = noLocA (HsTyVar noAnn NotPromoted (noLocA x))
+nlHsFunTy a b = noLocA (HsFunTy noAnn (parenthesizeHsType funPrec a) b)
+nlHsParTy t   = noLocA (HsParTy noAnn t)
 
 nlHsTyConApp :: LexicalFixity -> IdP (GhcPass p)
              -> [LHsTypeArg (GhcPass p)] -> LHsType (GhcPass p)
 nlHsTyConApp fixity tycon tys
   | Infix <- fixity
   , HsValArg ty1 : HsValArg ty2 : rest <- tys
-  = foldl' mk_app (noLoc $ HsOpTy noAnn ty1 (noLocA tycon) ty2) rest
+  = foldl' mk_app (noLocA $ HsOpTy noAnn ty1 (noLocA tycon) ty2) rest
   | otherwise
   = foldl' mk_app (nlHsTyVar tycon) tys
   where
     mk_app :: LHsType (GhcPass p) -> LHsTypeArg (GhcPass p) -> LHsType (GhcPass p)
-    mk_app fun@(L _ (HsOpTy {})) arg = mk_app (noLoc $ HsParTy noAnn fun) arg
+    mk_app fun@(L _ (HsOpTy {})) arg = mk_app (noLocA $ HsParTy noAnn fun) arg
       -- parenthesize things like `(A + B) C`
-    mk_app fun (HsValArg ty) = noLoc (HsAppTy noExtField fun (parenthesizeHsType appPrec ty))
-    mk_app fun (HsTypeArg _ ki) = noLoc (HsAppKindTy noSrcSpan fun (parenthesizeHsType appPrec ki))
-    mk_app fun (HsArgPar _) = noLoc (HsParTy noAnn fun)
+    mk_app fun (HsValArg ty) = noLocA (HsAppTy noExtField fun (parenthesizeHsType appPrec ty))
+    mk_app fun (HsTypeArg _ ki) = noLocA (HsAppKindTy noSrcSpan fun (parenthesizeHsType appPrec ki))
+    mk_app fun (HsArgPar _) = noLocA (HsParTy noAnn fun)
 
 nlHsAppKindTy ::
   LHsType (GhcPass p) -> LHsKind (GhcPass p) -> LHsType (GhcPass p)
 nlHsAppKindTy f k
-  = noLoc (HsAppKindTy noSrcSpan f (parenthesizeHsType appPrec k))
+  = noLocA (HsAppKindTy noSrcSpan f (parenthesizeHsType appPrec k))
 
 {-
 Tuples.  All these functions are *pre-typechecker* because they lack
@@ -673,26 +673,26 @@ typeToLHsType ty
       = case af of
           VisArg   -> nlHsFunTy (go arg) (go res)
           InvisArg | (theta, tau) <- tcSplitPhiTy ty
-                   -> noLoc (HsQualTy { hst_ctxt = noLocA (map go theta)
+                  -> noLocA (HsQualTy { hst_ctxt = noLocA (map go theta)
                                       , hst_xqual = noAnn
                                       , hst_body = go tau })
 
     go ty@(ForAllTy (Bndr _ argf) _)
       | (tvs, tau) <- tcSplitForAllTysSameVis argf ty
-      = noLoc (HsForAllTy { hst_fvf = argToForallVisFlag argf
-                          , hst_bndrs = map go_tv tvs
-                          , hst_xforall = noAnn
-                          , hst_body = go tau })
+      = noLocA (HsForAllTy { hst_fvf = argToForallVisFlag argf
+                           , hst_bndrs = map go_tv tvs
+                           , hst_xforall = noAnn
+                           , hst_body = go tau })
     go (TyVarTy tv)         = nlHsTyVar (getRdrName tv)
     go (LitTy (NumTyLit n))
-      = noLoc $ HsTyLit noExtField (HsNumTy NoSourceText n)
+      = noLocA $ HsTyLit noExtField (HsNumTy NoSourceText n)
     go (LitTy (StrTyLit s))
-      = noLoc $ HsTyLit noExtField (HsStrTy NoSourceText s)
+      = noLocA $ HsTyLit noExtField (HsStrTy NoSourceText s)
     go ty@(TyConApp tc args)
       | tyConAppNeedsKindSig True tc (length args)
         -- We must produce an explicit kind signature here to make certain
         -- programs kind-check. See Note [Kind signatures in typeToLHsType].
-      = nlHsParTy $ noLoc $ HsKindSig noAnn ty' (go (tcTypeKind ty))
+      = nlHsParTy $ noLocA $ HsKindSig noAnn ty' (go (tcTypeKind ty))
       | otherwise = ty'
        where
         ty' :: LHsType GhcPs

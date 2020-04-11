@@ -59,7 +59,7 @@ module TcRnMonad(
   addDependentFiles,
 
   -- * Error management
-  getSrcSpanM, setSrcSpan, addLocM, addLocMA,
+  getSrcSpanM, setSrcSpan, setSrcSpanA, addLocM, addLocMA,
   wrapLocM, wrapLocFstM, wrapLocFstMA, wrapLocSndM,wrapLocM_,wrapLocMA,
   getErrsVar, setErrsVar,
   addErr,
@@ -831,19 +831,22 @@ setSrcSpan (RealSrcSpan real_loc _) thing_inside
 -- Don't overwrite useful info with useless:
 setSrcSpan (UnhelpfulSpan _) thing_inside = thing_inside
 
+setSrcSpanA :: SrcSpanAnn -> TcRn a -> TcRn a
+setSrcSpanA l = setSrcSpan (locA l)
+
 addLocM :: (a -> TcM b) -> Located a -> TcM b
 addLocM fn (L loc a) = setSrcSpan loc $ fn a
 
 addLocMA :: (a -> TcM b) -> LocatedA a -> TcM b
-addLocMA fn (L loc a) = setSrcSpan (locA loc) $ fn a
+addLocMA fn (L loc a) = setSrcSpanA loc $ fn a
 
 wrapLocM :: (a -> TcM b) -> Located a -> TcM (Located b)
 wrapLocM fn (L loc a) = setSrcSpan loc $ do { b <- fn a
                                                 ; return (L loc b) }
 
 wrapLocMA :: (a -> TcM b) -> LocatedA a -> TcM (LocatedA b)
-wrapLocMA fn (L loc a) = setSrcSpan (locA loc) $ do { b <- fn a
-                                                    ; return (L loc b) }
+wrapLocMA fn (L loc a) = setSrcSpanA loc $ do { b <- fn a
+                                              ; return (L loc b) }
 
 wrapLocFstM :: (a -> TcM (b,c)) -> Located a -> TcM (Located b, c)
 wrapLocFstM fn (L loc a) =
@@ -853,7 +856,7 @@ wrapLocFstM fn (L loc a) =
 
 wrapLocFstMA :: (a -> TcM (b,c)) -> LocatedA a -> TcM (LocatedA b, c)
 wrapLocFstMA fn (L loc a) =
-  setSrcSpan (locA loc) $ do
+  setSrcSpanA loc $ do
     (b,c) <- fn a
     return (L loc b, c)
 

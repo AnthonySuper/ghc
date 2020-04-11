@@ -508,7 +508,7 @@ tcClsInstDecl (L loc (ClsInstDecl { cid_poly_ty = hs_ty, cid_binds = binds
 
         -- Finally, construct the Core representation of the instance.
         -- (This no longer includes the associated types.)
-        ; dfun_name <- newDFunName clas inst_tys (getLoc (hsSigType hs_ty))
+        ; dfun_name <- newDFunName clas inst_tys (getLocA (hsSigType hs_ty))
                 -- Dfun location is that of instance *header*
 
         ; ispec <- newClsInst (fmap unLoc overlap_mode) dfun_name
@@ -1725,7 +1725,7 @@ tcMethodBodyHelp hs_sig_fn sel_id local_meth_id meth_bind
               -- See Note [Instance method signatures]
   = do { let ctxt = FunSigCtxt sel_name True
        ; (sig_ty, hs_wrap)
-             <- setSrcSpan (getLoc (hsSigType hs_sig_ty)) $
+             <- setSrcSpan (getLocA (hsSigType hs_sig_ty)) $
                 do { inst_sigs <- xoptM LangExt.InstanceSigs
                    ; checkTc inst_sigs (misplacedInstSig sel_name hs_sig_ty)
                    ; sig_ty  <- tcHsSigType (FunSigCtxt sel_name False) hs_sig_ty
@@ -1738,7 +1738,7 @@ tcMethodBodyHelp hs_sig_fn sel_id local_meth_id meth_bind
        ; let inner_meth_id  = mkLocalId inner_meth_name sig_ty
              inner_meth_sig = CompleteSig { sig_bndr = inner_meth_id
                                           , sig_ctxt = ctxt
-                                          , sig_loc  = getLoc (hsSigType hs_sig_ty) }
+                                          , sig_loc  = getLocA (hsSigType hs_sig_ty) }
 
 
        ; (tc_bind, [inner_id]) <- tcPolyCheck no_prag_fn inner_meth_sig meth_bind
@@ -1918,7 +1918,7 @@ mkDefMethBind clas inst_tys sel_id dm_name
   where
     mk_vta :: LHsExpr GhcRn -> Type -> LHsExpr GhcRn
     mk_vta fun ty = noLoc (HsAppType noComments fun (mkEmptyWildCardBndrs $ nlHsParTy
-                                                $ noLoc $ XHsType $ NHsCoreTy ty))
+                                                $ noLocA $ XHsType $ NHsCoreTy ty))
        -- NB: use visible type application
        -- See Note [Default methods in instances]
 

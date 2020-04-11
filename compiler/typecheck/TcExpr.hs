@@ -248,7 +248,7 @@ tcExpr e@(HsOverLabel _ mb_fromLabel l) res_ty
   applyFromLabel loc fromLabel =
     HsAppType noComments
          (L (locA loc) (HsVar noExtField (L loc fromLabel)))
-         (mkEmptyWildCardBndrs (L (locA loc) (HsTyLit noExtField (HsStrTy NoSourceText l))))
+         (mkEmptyWildCardBndrs (L loc (HsTyLit noExtField (HsStrTy NoSourceText l))))
 
 tcExpr (HsLam _ match) res_ty
   = do  { (match', wrap) <- tcMatchLambda herald match_ctxt match res_ty
@@ -275,7 +275,7 @@ tcExpr e@(HsLamCase x matches) res_ty
 tcExpr e@(ExprWithTySig _ expr sig_ty) res_ty
   = do { let loc = getLoc (hsSigWcType sig_ty)
        ; sig_info <- checkNoErrs $  -- Avoid error cascade
-                     tcUserTypeSig loc sig_ty Nothing
+                     tcUserTypeSig (locA loc) sig_ty Nothing
        ; (expr', poly_ty) <- tcExprSig expr sig_info
        ; let expr'' = ExprWithTySig noExtField expr' sig_ty
        ; tcWrapResult e expr'' poly_ty res_ty }

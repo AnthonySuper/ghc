@@ -2751,7 +2751,7 @@ kcTyFamInstEqn tc_fam_tc
                                       , feqn_bndrs = mb_expl_bndrs
                                       , feqn_pats  = hs_pats
                                       , feqn_rhs   = hs_rhs_ty }}))
-  = setSrcSpan (locA loc) $
+  = setSrcSpanA loc $
     do { traceTc "kcTyFamInstEqn" (vcat
            [ text "tc_name ="    <+> ppr eqn_tc_name
            , text "fam_tc ="     <+> ppr tc_fam_tc <+> dcolon <+> ppr (tyConKind tc_fam_tc)
@@ -2793,7 +2793,7 @@ tcTyFamInstEqn fam_tc mb_clsinfo
                                       , feqn_pats   = hs_pats
                                       , feqn_rhs    = hs_rhs_ty }}))
   = ASSERT( getName fam_tc == eqn_tc_name )
-    setSrcSpan (locA loc) $
+    setSrcSpanA loc $
     do { traceTc "tcTyFamInstEqn" $
          vcat [ ppr fam_tc <+> ppr hs_pats
               , text "fam tc bndrs" <+> pprTyVars (tyConTyVars fam_tc)
@@ -2958,7 +2958,7 @@ tcFamTyPats fam_tc hs_pats
   where
     fam_name  = tyConName fam_tc
     fam_arity = tyConArity fam_tc
-    lhs_fun   = noLoc (HsTyVar noAnn NotPromoted (noLocA fam_name))
+    lhs_fun   = noLocA (HsTyVar noAnn NotPromoted (noLocA fam_name))
 
 unravelFamInstPats :: TcType -> [TcType]
 -- Decompose fam_app to get the argument patterns

@@ -164,7 +164,7 @@ rnWcBody ctxt nwc_rdrs hs_ty
        ; return (nwcs, hs_ty', fvs) }
   where
     rn_lty env (L loc hs_ty)
-      = setSrcSpan loc $
+      = setSrcSpanA loc $
         do { (hs_ty', fvs) <- rn_ty env hs_ty
            ; return (L loc hs_ty', fvs) }
 
@@ -183,7 +183,7 @@ rnWcBody ctxt nwc_rdrs hs_ty
       | Just (hs_ctxt1, hs_ctxt_last) <- snocView hs_ctxt
       , L lx (HsWildCardTy _)  <- ignoreParens hs_ctxt_last
       = do { (hs_ctxt1', fvs1) <- mapFvRn (rn_top_constraint env) hs_ctxt1
-           ; setSrcSpan lx $ checkExtraConstraintWildCard env hs_ctxt1
+           ; setSrcSpanA lx $ checkExtraConstraintWildCard env hs_ctxt1
            ; let hs_ctxt' = hs_ctxt1' ++ [L lx (HsWildCardTy noExtField)]
            ; (hs_ty', fvs2) <- rnLHsTyKi env hs_ty
            ; return (HsQualTy { hst_xqual = noAnn
@@ -460,7 +460,7 @@ rnContext doc theta = rnTyKiContext (mkTyKiEnv doc TypeLevel RnConstraint) theta
 --------------
 rnLHsTyKi  :: RnTyKiEnv -> LHsType GhcPs -> RnM (LHsType GhcRn, FreeVars)
 rnLHsTyKi env (L loc ty)
-  = setSrcSpan loc $
+  = setSrcSpanA loc $
     do { (ty', fvs) <- rnHsTyKi env ty
        ; return (L loc ty', fvs) }
 
@@ -1087,7 +1087,7 @@ mkHsOpTyRn mk1 _ _ ty1 ty2              -- Default case, no rearrangment
 mk_hs_op_ty :: (LHsType GhcRn -> LHsType GhcRn -> HsType GhcRn)
             -> Name -> Fixity -> LHsType GhcRn
             -> (LHsType GhcRn -> LHsType GhcRn -> HsType GhcRn)
-            -> Name -> Fixity -> LHsType GhcRn -> LHsType GhcRn -> SrcSpan
+            -> Name -> Fixity -> LHsType GhcRn -> LHsType GhcRn -> SrcSpanAnn
             -> RnM (HsType GhcRn)
 mk_hs_op_ty mk1 op1 fix1 ty1
             mk2 op2 fix2 ty21 ty22 loc2
@@ -1096,7 +1096,7 @@ mk_hs_op_ty mk1 op1 fix1 ty1
   | associate_right = return (mk1 ty1 (L loc2 (mk2 ty21 ty22)))
   | otherwise       = do { -- Rearrange to ((ty1 `op1` ty21) `op2` ty22)
                            new_ty <- mkHsOpTyRn mk1 op1 fix1 ty1 ty21
-                         ; return (mk2 (noLoc new_ty) ty22) }
+                         ; return (mk2 (noLocA new_ty) ty22) }
   where
     (nofix_error, associate_right) = compareFixity fix1 fix2
 
@@ -1374,7 +1374,7 @@ unexpectedTypeSigErr ty
 
 badKindSigErr :: HsDocContext -> LHsType GhcPs -> TcM ()
 badKindSigErr doc (L loc ty)
-  = setSrcSpan loc $ addErr $
+  = setSrcSpanA loc $ addErr $
     withHsDocContext doc $
     hang (text "Illegal kind signature:" <+> quotes (ppr ty))
        2 (text "Perhaps you intended to use KindSignatures")

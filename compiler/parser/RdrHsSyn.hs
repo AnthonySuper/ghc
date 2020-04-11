@@ -62,7 +62,7 @@ module   RdrHsSyn (
         LRuleTyTmVar, RuleTyTmVar(..),
         mkRuleBndrs, mkRuleTyVarBndrs,
         checkRuleTyVarBndrNames,
-        checkRecordSyntax,
+        checkRecordSyntax, checkRecordSyntaxA,
         checkEmptyGADTs,
         addFatalError, hintBangPat,
         TyEl(..), mergeOps, mergeDataCon,
@@ -349,7 +349,7 @@ mkFamDecl loc info lhs ksig injAnn annsIn
 
 mkLHsSigTypeA :: [AddApiAnn] -> LHsType GhcPs -> P (LHsSigType GhcPs)
 mkLHsSigTypeA anns typ = do
-  cs <- addAnnsAt (getLoc typ) []
+  cs <- addAnnsAt (getLocA typ) []
   return $ (mkLHsSigType typ) { hsib_ext = ApiAnn anns cs }
 
 mkSpliceDecl :: LHsExpr GhcPs -> HsDecl GhcPs
@@ -696,7 +696,7 @@ mkGadtDecl :: [LocatedA RdrName]
 mkGadtDecl names ty
   = (ConDeclGADT { con_g_ext  = noExtField
                  , con_names  = names
-                 , con_forall = L l $ isLHsForAllTy ty'
+                 , con_forall = L (locA l) $ isLHsForAllTy ty'
                  , con_qvars  = mkHsQTvs tvs
                  , con_mb_cxt = mcxt
                  , con_args   = args
@@ -711,7 +711,7 @@ mkGadtDecl names ty
     split_rho (L _ (HsQualTy { hst_ctxt = cxt, hst_body = tau })) ann
       = (Just cxt, tau, ann)
     split_rho (L l (HsParTy _ ty)) ann
-      = split_rho ty (ann++mkParensApiAnn l)
+      = split_rho ty (ann++mkParensApiAnn (locA l))
     split_rho tau                  ann
       = (Nothing, tau, ann)
 
@@ -719,12 +719,12 @@ mkGadtDecl names ty
 
     -- See Note [GADT abstract syntax] in GHC.Hs.Decls
     split_tau (L _ (HsFunTy _ (L loc (HsRecTy _ rf)) res_ty))
-      = (RecCon (L loc rf), res_ty)
+      = (RecCon (L (locA loc) rf), res_ty)
     split_tau tau
       = (PrefixCon [], tau)
 
     peel_parens (L l (HsParTy _ ty)) ann = peel_parens ty
-                                                       (ann++mkParensApiAnn l)
+                                                  (ann++mkParensApiAnn (locA l))
     peel_parens ty                   ann = (ty, ann)
 
 
@@ -835,7 +835,7 @@ checkTyVars pp_what equals_or_where tc tparms
        ; return (mkHsQTvs tvs, concat anns) }
   where
     check (HsTypeArg _ ki@(L loc _))
-                              = addFatalError loc $
+                              = addFatalError (locA loc) $
                                       vcat [ text "Unexpected type application" <+>
                                             text "@" <> ppr ki
                                           , text "In the" <+> pp_what <+>
@@ -847,7 +847,7 @@ checkTyVars pp_what equals_or_where tc tparms
         -- Keep around an action for adjusting the annotations of extra parens
     chkParens :: [AddApiAnn] -> LHsType GhcPs
               -> P (LHsTyVarBndr GhcPs, [AddApiAnn])
-    chkParens acc (L l (HsParTy _ ty)) = chkParens (mkParensApiAnn l ++ acc) ty
+    chkParens acc (L l (HsParTy _ ty)) = chkParens (mkParensApiAnn (locA l) ++ acc) ty
     chkParens acc ty = do
       tv <- chk ty
       return (tv, reverse acc)
@@ -855,11 +855,11 @@ checkTyVars pp_what equals_or_where tc tparms
         -- Check that the name space is correct!
     chk :: LHsType GhcPs -> P (LHsTyVarBndr GhcPs)
     chk (L l (HsKindSig _ (L _ (HsTyVar _ _ (L lv tv))) k))
-        | isRdrTyVar tv    = return (L l (KindedTyVar noAnn (L lv tv) k))
+        | isRdrTyVar tv    = return (L (locA l) (KindedTyVar noAnn (L lv tv) k))
     chk (L l (HsTyVar _ _ (L ltv tv)))
-        | isRdrTyVar tv    = return (L l (UserTyVar noAnn (L ltv tv)))
+        | isRdrTyVar tv    = return (L (locA l) (UserTyVar noAnn (L ltv tv)))
     chk t@(L loc _)
-        = addFatalError loc $
+        = addFatalError (locA loc) $
                 vcat [ text "Unexpected type" <+> quotes (ppr t)
                      , text "In the" <+> pp_what
                        <+> ptext (sLit "declaration for") <+> quotes tc'
@@ -929,6 +929,13 @@ checkRecordSyntax lr@(L loc r)
            text "Illegal record syntax (use TraditionalRecordSyntax):" <+> ppr r
          return lr
 
+checkRecordSyntaxA :: (MonadP m, Outputable a) => LocatedA a -> m (LocatedA a)
+checkRecordSyntaxA lr@(L loc r)
+    = do allowed <- getBit TraditionalRecordSyntaxBit
+         unless allowed $ addError (locA loc) $
+           text "Illegal record syntax (use TraditionalRecordSyntax):" <+> ppr r
+         return lr
+
 -- | Check if the gadt_constrlist is empty. Only raise parse error for
 -- `data T where` to avoid affecting existing error message, see #8258.
 checkEmptyGADTs :: Located ([AddApiAnn], [LConDecl GhcPs])
@@ -964,7 +971,7 @@ checkTyClHdr is_cls ty
        -> LexicalFixity
        -> P (LocatedA RdrName,
              [HsArg (LHsType GhcPs) (LHsKind GhcPs)], LexicalFixity, [AddApiAnn]) -- AZ temp
-    goL (L l ty) acc ann fix = go l ty acc ann fix
+    goL (L l ty) acc ann fix = go (locA l) ty acc ann fix
 
     -- workaround to define '*' despite StarIsType
     go :: SrcSpan
@@ -975,9 +982,9 @@ checkTyClHdr is_cls ty
        -> P (LocatedA RdrName,
              [HsArg (LHsType GhcPs) (LHsKind GhcPs)], LexicalFixity, [AddApiAnn]) -- AZ temp
     go lp (HsParTy _ (L l (HsStarTy _ isUni))) acc ann fix
-      = do { warnStarBndr l
+      = do { warnStarBndr (locA l)
            ; let name = mkOccName tcClsName (starSym isUni)
-           ; return (L (noAnnSrcSpan l) (Unqual name), acc, fix
+           ; return (L l (Unqual name), acc, fix
                     , (ann ++ mkParensApiAnn lp)) }
 
     go _ (HsTyVar _ _ ltc@(L _ tc)) acc ann fix
@@ -1046,9 +1053,8 @@ checkCmdBlockArguments :: LHsCmd GhcPs -> PV ()
 --     (((Eq a)))           -->  [Eq a]
 -- @
 checkContext :: LHsType GhcPs -> P (LHsContext GhcPs)
-checkContext (L l orig_t) = do
-  cs <- addAnnsAt l []
-  check (ApiAnn [] cs) (L l orig_t)
+checkContext orig_t@(L (SrcSpanAnn an l) _orig_t) = do
+  check an orig_t
  where
   check :: ApiAnn -> LHsType GhcPs -> P (LHsContext GhcPs)
   check anns (L _l (HsTupleTy ann' HsBoxedOrConstraintTuple ts))
@@ -1062,7 +1068,7 @@ checkContext (L l orig_t) = do
 
   -- no need for anns, returning original
   check anns t = checkNoDocs msg t
-                 *> return (L (SrcSpanAnn anns l) [L l orig_t])
+                 *> return (L (SrcSpanAnn anns l) [orig_t])
 
   msg = text "data constructor context"
 
@@ -1071,9 +1077,10 @@ checkContext (L l orig_t) = do
 checkNoDocs :: SDoc -> LHsType GhcPs -> P ()
 checkNoDocs msg ty = go ty
   where
+    go :: LHsType GhcPs -> P () -- AZ
     go (L _ (HsAppKindTy _ ty ki)) = go ty *> go ki
     go (L _ (HsAppTy _ t1 t2)) = go t1 *> go t2
-    go (L l (HsDocTy _ t ds)) = addError l $ hsep
+    go (L l (HsDocTy _ t ds)) = addError (locA l) $ hsep
                                   [ text "Unexpected haddock", quotes (ppr ds)
                                   , text "on", msg, quotes (ppr t) ]
     go _ = pure ()
@@ -1196,8 +1203,7 @@ checkValDef :: LocatedA (PatBuilder GhcPs)
 
 checkValDef lhs (Just sig) grhss
         -- x :: ty = rhs  parses as a *pattern* binding
-  = do lhs' <- runPV $ mkHsTySigPV (noAnnSrcSpan $ combineLocs (reLoc lhs) sig)
-                                                           (reLoc lhs) sig noAnn
+  = do lhs' <- runPV $ mkHsTySigPV (combineLocsA lhs sig) lhs sig noAnn
                         >>= checkLPat
        checkPatBind lhs' grhss
 
@@ -1380,14 +1386,14 @@ instance Outputable TyEl where
 -- 'TyEl' list.
 pUnpackedness
   :: [LocatedA TyEl] -- reversed TyEl
-  -> Maybe ( SrcSpan
+  -> Maybe ( SrcSpanAnn
            , [AddApiAnn]
            , SourceText
            , SrcUnpackedness
            , [LocatedA TyEl] {- remaining TyEl -})
 pUnpackedness (L l x1 : xs)
   | TyElUnpackedness (anns, prag, unpk) <- x1
-  = Just (locA l, anns, prag, unpk, xs)
+  = Just (l, anns, prag, unpk, xs)
 pUnpackedness _ = Nothing
 
 pBangTy
@@ -1401,9 +1407,9 @@ pBangTy lt@(L l1 _) xs =
   case pUnpackedness xs of
     Nothing -> (False, lt, pure [], xs)
     Just (l2, anns, prag, unpk, xs') ->
-      let bl = combineSrcSpans l1 l2
+      let bl = combineSrcSpansA l1 l2
           bt = addUnpackedness (prag, unpk) lt
-      in (True, L bl bt, addAnnsAt bl anns, xs')
+      in (True, L bl bt, addAnnsAt (locA bl) anns, xs')
 
 mkBangTy :: ApiAnn -> SrcStrictness -> LHsType GhcPs -> HsType GhcPs
 mkBangTy anns strictness =
@@ -1431,7 +1437,7 @@ addUnpackedness (prag, unpk) t
 -- See Note [Parsing data constructors is hard]
 mergeOps :: [LocatedA TyEl] -> P (LHsType GhcPs)
 mergeOps ((L l1 (TyElOpd t)) : xs)
-  | (_, t', addAnns, xs') <- pBangTy (L (locA l1) t) xs
+  | (_, t', addAnns, xs') <- pBangTy (L l1 t) xs
   , null xs' -- We accept a BangTy only when there are no preceding TyEl.
   = addAnns >> return t'
 mergeOps all_xs = go (0 :: Int) [] id all_xs
@@ -1442,19 +1448,19 @@ mergeOps all_xs = go (0 :: Int) [] id all_xs
     -- clause [unpk]:
     -- handle (NO)UNPACK pragmas
     go :: Int
-       -> [HsArg (Located (HsType GhcPs)) (LHsKind GhcPs)]
+       -> [HsArg (LHsType GhcPs) (LHsKind GhcPs)]
        -> (LHsType GhcPs -> LHsType GhcPs)
        -> [LocatedA TyEl]
-       -> P (Located (HsType GhcPs)) -- AZ temp
+       -> P (LHsType GhcPs) -- AZ temp
     go k acc ops_acc ((L l (TyElUnpackedness (anns, unpkSrc, unpk))):xs) =
       if not (null acc) && null xs
       then do { acc' <- eitherToP $ mergeOpsAcc acc
               ; let a = ops_acc acc'
                     strictMark = HsSrcBang unpkSrc unpk NoSrcStrict
-                    bl = combineSrcSpans (locA l) (getLoc a)
+                    bl = combineSrcSpansA l (getLoc a)
                     bt = HsBangTy noAnn strictMark a -- AZ:TODO anns
               -- AZ:TODO: deal with the comments below
-              ; _cs <- addAnnsAt bl anns
+              ; _cs <- addAnnsAt (locA bl) anns
               ; return (L bl bt) }
       else addFatalError (locA l) unpkError
       where
@@ -1489,7 +1495,7 @@ mergeOps all_xs = go (0 :: Int) [] id all_xs
     -- clause [opd]:
     -- whenever an operand is encountered, it is added to the accumulator
     go k acc ops_acc ((L l (TyElOpd a)):xs)
-      = go k (HsValArg (L (locA l) a):acc) ops_acc xs
+      = go k (HsValArg (L l a):acc) ops_acc xs
 
     -- clause [tyapp]:
     -- whenever a type application is encountered, it is added to the accumulator
@@ -1504,7 +1510,7 @@ mergeOpsAcc :: [HsArg (LHsType GhcPs) (LHsKind GhcPs)]
          -> Either (SrcSpan, SDoc) (LHsType GhcPs)
 mergeOpsAcc [] = panic "mergeOpsAcc: empty input"
 mergeOpsAcc (HsTypeArg _ (L loc ki):_)
-  = Left (loc, text "Unexpected type application:" <+> ppr ki)
+  = Left (locA loc, text "Unexpected type application:" <+> ppr ki)
 mergeOpsAcc (HsValArg ty : xs) = go1 ty xs
   where
     go1 :: LHsType GhcPs
@@ -1573,7 +1579,7 @@ Therefore, it is safe to omit a check for non-emptiness of 'acc' in clause
 pInfixSide
   :: [LocatedA TyEl] -> Maybe (LHsType GhcPs, P ApiAnnComments, [LocatedA TyEl])
 pInfixSide ((L l (TyElOpd t)):xs)
-  | (True, t', addAnns, xs') <- pBangTy (L (locA l) t) xs
+  | (True, t', addAnns, xs') <- pBangTy (L l t) xs
   = Just (t', addAnns, xs')
 pInfixSide (el:xs1)
   | Just t1 <- pLHsTypeArg el
@@ -1591,7 +1597,7 @@ pInfixSide (el:xs1)
 pInfixSide _ = Nothing
 
 pLHsTypeArg :: LocatedA TyEl -> Maybe (HsArg (LHsType GhcPs) (LHsKind GhcPs))
-pLHsTypeArg (L l (TyElOpd a)) = Just (HsValArg (L (locA l) a))
+pLHsTypeArg (L l (TyElOpd a)) = Just (HsValArg (L l a))
 pLHsTypeArg (L _ (TyElKindApp l a)) = Just (HsTypeArg l a)
 pLHsTypeArg _ = Nothing
 
@@ -1689,7 +1695,7 @@ mergeDataCon all_xs =
                  , PrefixCon ts
                  , mTrailingDoc ) )
     goFirst ((L l (TyElOpd t)):xs)
-      | (_, t', addAnns, xs') <- pBangTy (L (locA l) t) xs
+      | (_, t', addAnns, xs') <- pBangTy (L l t) xs
       = go addAnns Nothing [mkLHsDocTyMaybe t' trailingFieldDoc] xs'
     goFirst (L l (TyElKindApp _ _):_)
       = goInfix Monoid.<> Left (locA l, kindAppErr)
@@ -1711,7 +1717,7 @@ mergeDataCon all_xs =
     go addAnns mLastDoc ts ((L l (TyElDocPrev doc)):xs) =
       go addAnns (mLastDoc `mplus` Just (L (locA l) doc)) ts xs
     go addAnns mLastDoc ts ((L l (TyElOpd t)):xs)
-      | (_, t', addAnns', xs') <- pBangTy (L (locA l) t) xs
+      | (_, t', addAnns', xs') <- pBangTy (L l t) xs
       , t'' <- mkLHsDocTyMaybe t' mLastDoc
       = go (addAnns >> addAnns') Nothing (t'':ts) xs'
     go _ _ _ ((L _ (TyElOpr _)):_) =
@@ -1884,7 +1890,7 @@ class b ~ (Body b) GhcPs => DisambECP b where
   mkHsWildCardPV :: SrcSpan -> PV (Located b)
   -- | Disambiguate "a :: t" (type annotation)
   mkHsTySigPV
-    :: SrcSpanAnn -> Located b -> LHsType GhcPs -> ApiAnn -> PV (LocatedA b)
+    :: SrcSpanAnn -> LocatedA b -> LHsType GhcPs -> ApiAnn -> PV (LocatedA b)
   -- | Disambiguate "[a,b,c]" (list syntax)
   mkHsExplicitListPV :: SrcSpan -> [Located b] -> ApiAnnCO -> PV (Located b)
   -- | Disambiguate "$(...)" and "[quasi|...|]" (TH splices)
@@ -2062,7 +2068,7 @@ instance DisambECP (HsExpr GhcPs) where
     return $ L l (HsOverLit (comment cs) a)
   mkHsWildCardPV l = return $ L l (hsHoleExpr noAnn)
   mkHsTySigPV l a sig anns
-    = return $ L l (ExprWithTySig anns a (mkLHsSigWcType sig))
+    = return $ L l (ExprWithTySig anns (reLoc a) (mkLHsSigWcType sig))
   mkHsExplicitListPV l xs anns = return $ L l (ExplicitList anns Nothing xs)
   mkHsSplicePV sp@(L l _sp) = do
     cs <- addAnnsAt l []
@@ -2155,7 +2161,7 @@ instance DisambECP (PatBuilder GhcPs) where
   mkHsOverLitPV (L l a) = return $ L l (PatBuilderOverLit a)
   mkHsWildCardPV l = return $ L l (PatBuilderPat (WildPat noExtField))
   mkHsTySigPV l b sig anns = do
-    p <- checkLPat (reLocA b)
+    p <- checkLPat b
     return $ L l (PatBuilderPat (SigPat anns p (mkLHsSigWcType sig)))
   mkHsExplicitListPV l xs anns = do
     ps <- traverse (checkLPat . reLocA) xs
@@ -3224,12 +3230,12 @@ mkSumOrTuplePat l Boxed a@Sum{} _ =
 
 mkLHsOpTy :: LHsType GhcPs -> LocatedA RdrName -> LHsType GhcPs -> LHsType GhcPs
 mkLHsOpTy x op y =
-  let loc = getLoc x `combineSrcSpans` getLocA op `combineSrcSpans` getLoc y
+  let loc = getLoc x `combineSrcSpansA` getLoc op `combineSrcSpansA` getLoc y
   in L loc (mkHsOpTy x op y)
 
 mkLHsDocTy :: LHsType GhcPs -> LHsDocString -> LHsType GhcPs
 mkLHsDocTy t doc =
-  let loc = getLoc t `combineSrcSpans` getLoc doc
+  let loc = getLoc t `combineSrcSpansA` (noAnnSrcSpan $ getLoc doc)
   in L loc (HsDocTy noAnn t doc) -- AZ:TODO anns
 
 mkLHsDocTyMaybe :: LHsType GhcPs -> Maybe LHsDocString -> LHsType GhcPs

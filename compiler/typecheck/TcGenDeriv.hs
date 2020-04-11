@@ -1957,7 +1957,7 @@ genAuxBindSpec dflags loc (DerivCon2Tag tycon)
   where
     rdr_name = con2tag_RDR dflags tycon
 
-    sig_ty = mkLHsSigWcType $ L loc $ XHsType $ NHsCoreTy $
+    sig_ty = mkLHsSigWcType $ L (noAnnSrcSpan loc) $ XHsType $ NHsCoreTy $
              mkSpecSigmaTy (tyConTyVars tycon) (tyConStupidTheta tycon) $
              mkParentType tycon `mkVisFunTy` intPrimTy
 
@@ -1981,7 +1981,7 @@ genAuxBindSpec dflags loc (DerivTag2Con tycon)
            nlHsApp (nlHsVar tagToEnum_RDR) a_Expr)],
      L loc (TypeSig noAnn [L (noAnnSrcSpan loc) rdr_name] sig_ty))
   where
-    sig_ty = mkLHsSigWcType $ L loc $
+    sig_ty = mkLHsSigWcType $ L (noAnnSrcSpan loc) $
              XHsType $ NHsCoreTy $ mkSpecForAllTys (tyConTyVars tycon) $
              intTy `mkVisFunTy` mkParentType tycon
 
@@ -1992,7 +1992,7 @@ genAuxBindSpec dflags loc (DerivMaxTag tycon)
      L loc (TypeSig noAnn [L (noAnnSrcSpan loc) rdr_name] sig_ty))
   where
     rdr_name = maxtag_RDR dflags tycon
-    sig_ty = mkLHsSigWcType (L loc (XHsType (NHsCoreTy intTy)))
+    sig_ty = mkLHsSigWcType (L (noAnnSrcSpan loc) (XHsType (NHsCoreTy intTy)))
     rhs = nlHsApp (nlHsVar intDataCon_RDR)
                   (nlHsLit (HsIntPrim NoSourceText max_tag))
     max_tag =  case (tyConDataCons tycon) of

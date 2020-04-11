@@ -496,7 +496,7 @@ derivePred tc tys mb_lderiv_strat via_tvs deriv_pred =
   -- We carefully set up uses of recoverM to minimize error message
   -- cascades. See Note [Recovering from failures in deriving clauses].
   recoverM (pure Nothing) $
-  setSrcSpan (getLoc (hsSigType deriv_pred)) $ do
+  setSrcSpan (getLocA (hsSigType deriv_pred)) $ do
     traceTc "derivePred" $ vcat
       [ text "tc"              <+> ppr tc
       , text "tys"             <+> ppr tys
@@ -729,7 +729,7 @@ tcStandaloneDerivInstType ctxt
                                         , hst_xforall = noAnn
                                         , hst_body  = rho }}
        let (tvs, _theta, cls, inst_tys) = tcSplitDFunTy dfun_ty
-       pure (tvs, InferContext (Just wc_span), cls, inst_tys)
+       pure (tvs, InferContext (Just (locA wc_span)), cls, inst_tys)
   | otherwise
   = do dfun_ty <- tcHsClsInstType ctxt deriv_ty
        let (tvs, theta, cls, inst_tys) = tcSplitDFunTy dfun_ty

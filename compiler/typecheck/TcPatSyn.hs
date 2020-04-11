@@ -577,7 +577,7 @@ collectPatSynArgInfo details =
 
 addPatSynCtxt :: LocatedA Name -> TcM a -> TcM a
 addPatSynCtxt (L loc name) thing_inside
-  = setSrcSpan (locA loc) $
+  = setSrcSpanA loc $
     addErrCtxt (text "In the declaration for pattern synonym"
                 <+> quotes (ppr name)) $
     thing_inside

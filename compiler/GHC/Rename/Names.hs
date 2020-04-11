@@ -273,7 +273,7 @@ rnImportDecl this_mod
                                      , ideclSource = want_boot, ideclSafe = mod_safe
                                      , ideclQualified = qual_style, ideclImplicit = implicit
                                      , ideclAs = as_mod, ideclHiding = imp_details }))
-  = setSrcSpan (locA loc) $ do
+  = setSrcSpanA loc $ do
 
     when (isJust mb_pkg) $ do
         pkg_imports <- xoptM LangExt.PackageImports
@@ -967,7 +967,7 @@ filterImports iface decl_spec (Just (want_hiding, L l import_items))
 
     lookup_lie :: LIE GhcPs -> TcRn [(LIE GhcRn, AvailInfo)]
     lookup_lie (L loc ieRdr)
-        = do (stuff, warns) <- setSrcSpan (locA loc) $
+        = do (stuff, warns) <- setSrcSpanA loc $
                                liftM (fromMaybe ([],[])) $
                                run_lookup (lookup_ie ieRdr)
              mapM_ emit_warning warns

@@ -62,7 +62,7 @@ module GHC.Hs.Types (
         ignoreParens, hsSigType, hsSigWcType,
         hsLTyVarBndrToType, hsLTyVarBndrsToTypes,
         hsTyKindSig,
-        hsConDetailsArgs,
+        -- hsConDetailsArgs,
 
         -- Printing
         pprHsType, pprHsForAll, pprHsForAllExtra, pprHsExplicitForAll,
@@ -104,7 +104,7 @@ import Data.Data hiding ( Fixity, Prefix, Infix )
 -}
 
 -- | Located Bang Type
-type LBangType pass = Located (BangType pass)
+type LBangType pass = LocatedA (BangType pass)
 
 -- | Bang Type
 --
@@ -117,7 +117,7 @@ type BangType pass  = HsType pass       -- Bangs are in the HsType data type
 getBangType :: LHsType a -> LHsType a
 getBangType                 (L _ (HsBangTy _ _ lty))       = lty
 getBangType (L _ (HsDocTy x (L _ (HsBangTy _ _ lty)) lds)) =
-  addCLoc lty lds (HsDocTy x lty lds)
+  addCLocA lty lds (HsDocTy x lty lds)
 getBangType lty                                            = lty
 
 getBangStrictness :: LHsType a -> HsSrcBang
@@ -298,7 +298,7 @@ noLHsContext = noLocA []
 type HsContext pass = [LHsType pass]
 
 -- | Located Haskell Type
-type LHsType pass = Located (HsType pass)
+type LHsType pass = LocatedA (HsType pass)
       -- ^ May have 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnComma' when
       --   in a list
 
@@ -308,7 +308,7 @@ type LHsType pass = Located (HsType pass)
 type HsKind pass = HsType pass
 
 -- | Located Haskell Kind
-type LHsKind pass = Located (HsKind pass)
+type LHsKind pass = LocatedA (HsKind pass)
       -- ^ 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnDcolon'
 
       -- For details on above see note [Api annotations] in ApiAnnotation
@@ -900,13 +900,14 @@ instance (Outputable arg, Outputable rec)
   ppr (RecCon rec)     = text "RecCon:" <+> ppr rec
   ppr (InfixCon l r)   = text "InfixCon:" <+> ppr [l, r]
 
-hsConDetailsArgs ::
-     HsConDetails (LHsType a) (Located [LConDeclField a])
-  -> [LHsType a]
-hsConDetailsArgs details = case details of
-  InfixCon a b -> [a,b]
-  PrefixCon xs -> xs
-  RecCon r -> map (cd_fld_type . unLoc) (unLoc r)
+-- AZ: this function does not seem to be used anywhere
+-- hsConDetailsArgs ::
+--      HsConDetails (LHsType a) (Located [LConDeclField a])
+--   -> [LHsType a]
+-- hsConDetailsArgs details = case details of
+--   InfixCon a b -> [a,b]
+--   PrefixCon xs -> xs
+--   RecCon r -> map (cd_fld_type . unLoc) (unLoc r)
 
 {-
 Note [ConDeclField passs]
@@ -1053,11 +1054,11 @@ hsLTyVarLocNames qtvs = map hsLTyVarLocName (hsQTvExplicit qtvs)
 
 -- | Convert a LHsTyVarBndr to an equivalent LHsType.
 hsLTyVarBndrToType :: LHsTyVarBndr (GhcPass p) -> LHsType (GhcPass p)
-hsLTyVarBndrToType = mapLoc cvt
+hsLTyVarBndrToType = mapLocA cvt
   where cvt (UserTyVar _ n) = HsTyVar noAnn NotPromoted n
         cvt (KindedTyVar _ (L name_loc n) kind)
           = HsKindSig noAnn
-                   (L (locA name_loc)
+                   (L name_loc
                            (HsTyVar noAnn NotPromoted (L name_loc n))) kind
         cvt (XTyVarBndr nec) = noExtCon nec
 
@@ -1111,7 +1112,7 @@ mkHsOpTy ty1 op ty2 = HsOpTy noAnn ty1 op ty2
 
 mkHsAppTy :: LHsType (GhcPass p) -> LHsType (GhcPass p) -> LHsType (GhcPass p)
 mkHsAppTy t1 t2
-  = addCLoc t1 t2 (HsAppTy noExtField t1 (parenthesizeHsType appPrec t2))
+  = addCLocAA t1 t2 (HsAppTy noExtField t1 (parenthesizeHsType appPrec t2))
 
 mkHsAppTys :: LHsType (GhcPass p) -> [LHsType (GhcPass p)]
            -> LHsType (GhcPass p)
@@ -1120,7 +1121,7 @@ mkHsAppTys = foldl' mkHsAppTy
 mkHsAppKindTy :: XAppKindTy (GhcPass p) -> LHsType (GhcPass p) -> LHsType (GhcPass p)
               -> LHsType (GhcPass p)
 mkHsAppKindTy ext ty k
-  = addCLoc ty k (HsAppKindTy ext ty k)
+  = addCLocAA ty k (HsAppKindTy ext ty k)
 
 {-
 ************************************************************************

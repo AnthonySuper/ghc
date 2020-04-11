@@ -36,7 +36,7 @@ import GHC.Types.Name.Reader
 import GHC.Types.Var
 import Outputable hiding ((<>))
 import GHC.Types.SrcLoc (Located, GenLocated(..), RealLocated, SrcSpan,
-                         noSrcSpan, leftmost_smallest)
+                         noSrcSpan, leftmost_smallest, combineSrcSpans, getLoc)
 import Lexer (AddApiAnn)
 import ApiAnnotation
 
@@ -267,6 +267,25 @@ instance Outputable SrcSpanAnn where
 
 sortLocatedA :: [LocatedA a] -> [LocatedA a]
 sortLocatedA = sortBy (leftmost_smallest `on` getLocA)
+
+mapLocA :: (a -> b) -> Located a -> LocatedA b
+mapLocA f (L l a) = L (noAnnSrcSpan l) (f a)
+
+-- AZ:TODO: move this somewhere sane
+
+combineLocsA :: LocatedA a -> LocatedA b -> SrcSpanAnn
+combineLocsA (L a _) (L b _) = combineSrcSpansA a b
+
+combineSrcSpansA :: SrcSpanAnn -> SrcSpanAnn -> SrcSpanAnn
+combineSrcSpansA (SrcSpanAnn aa la) (SrcSpanAnn ab lb)
+  = SrcSpanAnn (aa <> ab) (combineSrcSpans la lb)
+
+-- | Combine locations from two 'Located' things and add them to a third thing
+addCLocA :: LocatedA a -> Located b -> c -> LocatedA c
+addCLocA a b c = L (noAnnSrcSpan $ combineSrcSpans (locA $ getLoc a) (getLoc b)) c
+
+addCLocAA :: LocatedA a -> LocatedA b -> c -> LocatedA c
+addCLocAA a b c = L (noAnnSrcSpan $ combineSrcSpans (locA $ getLoc a) (locA $ getLoc b)) c
 
 -- ---------------------------------------------------------------------
 -- Managing annotations for lists

@@ -297,7 +297,7 @@ cvtDec (InstanceD o ctxt ty decs)
                       , cid_sigs = Hs.mkClassOpSigs sigs'
                       , cid_tyfam_insts = ats', cid_datafam_insts = adts'
                       , cid_overlap_mode
-                                   = fmap (L (noAnnSrcSpan loc) . overlap) o } }
+                                   = fmap (L loc . overlap) o } }
   where
   overlap pragma =
     case pragma of
@@ -634,8 +634,8 @@ cvtConstr (RecGadtC c varstrtys ty)
   = do  { c'       <- mapM cNameL c
         ; ty'      <- cvtType ty
         ; rec_flds <- mapM cvt_id_arg varstrtys
-        ; let rec_ty = noLoc (HsFunTy noAnn
-                                           (noLoc $ HsRecTy noAnn rec_flds) ty')
+        ; let rec_ty = noLocA (HsFunTy noAnn
+                                          (noLocA $ HsRecTy noAnn rec_flds) ty')
         ; returnL $ fst $ mkGadtDecl c' rec_ty }
 
 cvtSrcUnpackedness :: TH.SourceUnpackedness -> SrcUnpackedness
@@ -654,7 +654,7 @@ cvt_arg (Bang su ss, ty)
        ; let ty' = parenthesizeHsType appPrec ty''
              su' = cvtSrcUnpackedness su
              ss' = cvtSrcStrictness ss
-       ; returnL $ HsBangTy noAnn (HsSrcBang NoSourceText su' ss') ty' }
+       ; returnLA $ HsBangTy noAnn (HsSrcBang NoSourceText su' ss') ty' }
 
 cvt_id_arg :: (TH.Name, TH.Bang, TH.Type) -> CvtM (LConDeclField GhcPs)
 cvt_id_arg (i, str, ty)
@@ -1391,7 +1391,7 @@ cvtTypeKind ty_str ty
            TupleT n
             | Just normals <- m_normals
             , normals `lengthIs` n         -- Saturated
-            -> returnL (HsTupleTy noAnn HsBoxedOrConstraintTuple normals)
+            -> returnLA (HsTupleTy noAnn HsBoxedOrConstraintTuple normals)
             | otherwise
             -> mk_apps
                (HsTyVar noAnn NotPromoted
@@ -1400,7 +1400,7 @@ cvtTypeKind ty_str ty
            UnboxedTupleT n
              | Just normals <- m_normals
              , normals `lengthIs` n               -- Saturated
-             -> returnL (HsTupleTy noAnn HsUnboxedTuple normals)
+             -> returnLA (HsTupleTy noAnn HsUnboxedTuple normals)
              | otherwise
              -> mk_apps
                 (HsTyVar noAnn NotPromoted
@@ -1414,7 +1414,7 @@ cvtTypeKind ty_str ty
                             text "Sums must have an arity of at least 2" ]
              | Just normals <- m_normals
              , normals `lengthIs` n -- Saturated
-             -> returnL (HsSumTy noAnn normals)
+             -> returnLA (HsSumTy noAnn normals)
              | otherwise
              -> mk_apps
                 (HsTyVar noAnn NotPromoted (noLocA (getRdrName (sumTyCon n))))
@@ -1423,13 +1423,13 @@ cvtTypeKind ty_str ty
              | Just normals <- m_normals
              , [x',y'] <- normals -> do
                  x'' <- case unLoc x' of
-                          HsFunTy{}    -> returnL (HsParTy noAnn x')
-                          HsForAllTy{} -> returnL (HsParTy noAnn x') -- #14646
-                          HsQualTy{}   -> returnL (HsParTy noAnn x') -- #15324
+                          HsFunTy{}    -> returnLA (HsParTy noAnn x')
+                          HsForAllTy{} -> returnLA (HsParTy noAnn x') -- #14646
+                          HsQualTy{}   -> returnLA (HsParTy noAnn x') -- #15324
                           _            -> return $
                                           parenthesizeHsType sigPrec x'
                  let y'' = parenthesizeHsType sigPrec y'
-                 returnL (HsFunTy noAnn x'' y'')
+                 returnLA (HsFunTy noAnn x'' y'')
              | otherwise
              -> mk_apps
                 (HsTyVar noAnn NotPromoted (noLocA (getRdrName funTyCon)))
@@ -1437,7 +1437,7 @@ cvtTypeKind ty_str ty
            ListT
              | Just normals <- m_normals
              , [x'] <- normals -> do
-                returnL (HsListTy noAnn x')
+                returnLA (HsListTy noAnn x')
              | otherwise
              -> mk_apps
                 (HsTyVar noAnn NotPromoted (noLocA (getRdrName listTyCon)))
@@ -1454,7 +1454,8 @@ cvtTypeKind ty_str ty
              -> do { tvs' <- cvtTvs tvs
                    ; cxt' <- cvtContext funPrec cxt
                    ; ty'  <- cvtType ty
-                   ; loc <- getL
+                   ; loc' <- getL
+                   ; let loc = noAnnSrcSpan loc'
                    ; let hs_ty  = mkHsForAllTy tvs loc ForallInvis tvs' rho_ty
                          rho_ty = mkHsQualTy cxt loc cxt' ty'
 
@@ -1465,7 +1466,7 @@ cvtTypeKind ty_str ty
              -> do { tvs' <- cvtTvs tvs
                    ; ty'  <- cvtType ty
                    ; loc  <- getL
-                   ; pure $ mkHsForAllTy tvs loc ForallVis tvs' ty' }
+                   ; pure $ mkHsForAllTy tvs (noAnnSrcSpan loc) ForallVis tvs' ty' }
 
            SigT ty ki
              -> do { ty' <- cvtType ty
@@ -1509,7 +1510,7 @@ cvtTypeKind ty_str ty
            PromotedTupleT n
               | Just normals <- m_normals
               , normals `lengthIs` n   -- Saturated
-              -> returnL (HsExplicitTupleTy noAnn normals)
+              -> returnLA (HsExplicitTupleTy noAnn normals)
               | otherwise
               -> mk_apps
                  (HsTyVar noAnn IsPromoted
@@ -1524,7 +1525,7 @@ cvtTypeKind ty_str ty
               | Just normals <- m_normals
               , [ty1, L _ (HsExplicitListTy _ ip tys2)] <- normals
               -> do
-                  returnL (HsExplicitListTy noAnn ip (ty1:tys2))
+                  returnLA (HsExplicitListTy noAnn ip (ty1:tys2))
               | otherwise
               -> mk_apps
                  (HsTyVar noAnn IsPromoted (noLocA (getRdrName consDataCon)))
@@ -1547,7 +1548,7 @@ cvtTypeKind ty_str ty
              , [x',y'] <- normals ->
                    let px = parenthesizeHsType opPrec x'
                        py = parenthesizeHsType opPrec y'
-                   in returnL (HsOpTy noAnn px (noLocA eqTyCon_RDR) py)
+                   in returnLA (HsOpTy noAnn px (noLocA eqTyCon_RDR) py)
                -- The long-term goal is to remove the above case entirely and
                -- subsume it under the case for InfixT. See #15815, comment:6,
                -- for more details.
@@ -1558,7 +1559,7 @@ cvtTypeKind ty_str ty
            ImplicitParamT n t
              -> do { n' <- wrapL $ ipName n
                    ; t' <- cvtType t
-                   ; returnL (HsIParamTy noAnn n' t')
+                   ; returnLA (HsIParamTy noAnn n' t')
                    }
 
            _ -> failWith (ptext (sLit ("Malformed " ++ ty_str)) <+> text (show ty))
@@ -1577,7 +1578,7 @@ name_promotedness nm
 -- | Constructs an application of a type to arguments passed in a list.
 mk_apps :: HsType GhcPs -> [LHsTypeArg GhcPs] -> CvtM (LHsType GhcPs)
 mk_apps head_ty type_args = do
-  head_ty' <- returnL head_ty
+  head_ty' <- returnLA head_ty
   -- We must parenthesize the function type in case of an explicit
   -- signature. For instance, in `(Maybe :: Type -> Type) Int`, there
   -- _must_ be parentheses around `Maybe :: Type -> Type`.
@@ -1598,7 +1599,7 @@ mk_apps head_ty type_args = do
    where
     -- See Note [Adding parens for splices]
     add_parens lt@(L _ t)
-      | hsTypeNeedsParens appPrec t = returnL (HsParTy noAnn lt)
+      | hsTypeNeedsParens appPrec t = returnLA (HsParTy noAnn lt)
       | otherwise                   = return lt
 
 wrap_tyarg :: LHsTypeArg GhcPs -> LHsTypeArg GhcPs
@@ -1632,9 +1633,9 @@ See (among other closed issued) https://gitlab.haskell.org/ghc/ghc/issues/14289
 
 -- | Constructs an arrow type with a specified return type
 mk_arr_apps :: [LHsType GhcPs] -> HsType GhcPs -> CvtM (LHsType GhcPs)
-mk_arr_apps tys return_ty = foldrM go return_ty tys >>= returnL
+mk_arr_apps tys return_ty = foldrM go return_ty tys >>= returnLA
     where go :: LHsType GhcPs -> HsType GhcPs -> CvtM (HsType GhcPs)
-          go arg ret_ty = do { ret_ty_l <- returnL ret_ty
+          go arg ret_ty = do { ret_ty_l <- returnLA ret_ty
                              ; return (HsFunTy noAnn arg ret_ty_l) }
 
 split_ty_app :: TH.Type -> CvtM (TH.Type, [LHsTypeArg GhcPs])
@@ -1663,7 +1664,7 @@ cvtOpAppT (UInfixT x op2 y) op1 z
 cvtOpAppT x op y
   = do { op' <- tconNameL op
        ; x' <- cvtType x
-       ; returnL (mkHsOpTy x' op' y) }
+       ; returnLA (mkHsOpTy x' op' y) }
 
 cvtKind :: TH.Kind -> CvtM (LHsKind GhcPs)
 cvtKind = cvtTypeKind "kind"
@@ -1700,12 +1701,14 @@ cvtPatSynSigTy :: TH.Type -> CvtM (LHsType GhcPs)
 -- see Note [Pattern synonym type signatures and Template Haskell]
 cvtPatSynSigTy (ForallT univs reqs (ForallT exis provs ty))
   | null exis, null provs = cvtType (ForallT univs reqs ty)
-  | null univs, null reqs = do { l   <- getL
+  | null univs, null reqs = do { l'   <- getL
+                               ; let l = noAnnSrcSpan l'
                                ; ty' <- cvtType (ForallT exis provs ty)
-                               ; return $ L l (HsQualTy { hst_ctxt = L (noAnnSrcSpan l) []
+                               ; return $ L l (HsQualTy { hst_ctxt = L l []
                                                         , hst_xqual = noAnn
                                                         , hst_body = ty' }) }
-  | null reqs             = do { l      <- getL
+  | null reqs             = do { l'      <- getL
+                               ; let l = noAnnSrcSpan l'
                                ; univs' <- hsQTvExplicit <$> cvtTvs univs
                                ; ty'    <- cvtType (ForallT exis provs ty)
                                ; let forTy = HsForAllTy
@@ -1713,7 +1716,7 @@ cvtPatSynSigTy (ForallT univs reqs (ForallT exis provs ty))
                                               , hst_bndrs = univs'
                                               , hst_xforall = noAnn
                                               , hst_body = L l cxtTy }
-                                     cxtTy = HsQualTy { hst_ctxt = L (noAnnSrcSpan l) []
+                                     cxtTy = HsQualTy { hst_ctxt = L l []
                                                       , hst_xqual = noAnn
                                                       , hst_body = ty' }
                                ; return $ L l forTy }
@@ -1761,7 +1764,7 @@ unboxedSumChecks alt arity
 -- using the provided 'LHsQTyVars' and 'LHsType'.
 mkHsForAllTy :: [TH.TyVarBndr]
              -- ^ The original Template Haskell type variable binders
-             -> SrcSpan
+             -> SrcSpanAnn
              -- ^ The location of the returned 'LHsType' if it needs an
              --   explicit forall
              -> ForallVisFlag
@@ -1789,7 +1792,7 @@ mkHsForAllTy tvs loc fvf tvs' rho_ty
 -- they're empty. See #13183.
 mkHsQualTy :: TH.Cxt
            -- ^ The original Template Haskell context
-           -> SrcSpan
+           -> SrcSpanAnn
            -- ^ The location of the returned 'LHsType' if it needs an
            --   explicit context
            -> LHsContext GhcPs

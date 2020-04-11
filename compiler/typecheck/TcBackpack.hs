@@ -585,7 +585,7 @@ mergeSignatures
                       -- a signature package (i.e., does not expose any
                       -- modules.)  If so, we can thin it.
                       | isFromSignaturePackage
-                      -> setSrcSpan (locA loc) $ do
+                      -> setSrcSpanA loc $ do
                         -- Suppress missing errors; they might be used to refer
                         -- to entities from other signatures we are merging in.
                         -- If an identifier truly doesn't exist in any of the

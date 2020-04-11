@@ -170,7 +170,7 @@ funsSigCtxt []              = panic "funSigCtxt"
 
 addSigCtxt :: UserTypeCtxt -> LHsType GhcRn -> TcM a -> TcM a
 addSigCtxt ctxt hs_ty thing_inside
-  = setSrcSpan (getLoc hs_ty) $
+  = setSrcSpan (getLocA hs_ty) $
     addErrCtxt (pprSigCtxt ctxt hs_ty) $
     thing_inside
 
@@ -391,7 +391,7 @@ tcHsClsInstType :: UserTypeCtxt    -- InstDeclCtxt or SpecInstCtxt
                 -> TcM Type
 -- Like tcHsSigType, but for a class instance declaration
 tcHsClsInstType user_ctxt hs_inst_ty
-  = setSrcSpan (getLoc (hsSigType hs_inst_ty)) $
+  = setSrcSpan (getLocA (hsSigType hs_inst_ty)) $
     do { -- Fail eagerly if tcTopLHsType fails.  We are at top level so
          -- these constraints will never be solved later. And failing
          -- eagerly avoids follow-on errors when checkValidInstance
@@ -618,7 +618,7 @@ missing any patterns.
 -- level.
 tc_infer_lhs_type :: TcTyMode -> LHsType GhcRn -> TcM (TcType, TcKind)
 tc_infer_lhs_type mode (L span ty)
-  = setSrcSpan span $
+  = setSrcSpanA span $
     tc_infer_hs_type mode ty
 
 ---------------------------
@@ -678,7 +678,7 @@ tc_infer_hs_type mode other_ty
 ------------------------------------------
 tc_lhs_type :: TcTyMode -> LHsType GhcRn -> TcKind -> TcM TcType
 tc_lhs_type mode (L span ty) exp_kind
-  = setSrcSpan span $
+  = setSrcSpanA span $
     tc_hs_type mode ty exp_kind
 
 tc_hs_type :: TcTyMode -> HsType GhcRn -> TcKind -> TcM TcType
@@ -793,7 +793,7 @@ tc_hs_type mode rn_ty@(HsTupleTy _ HsBoxedOrConstraintTuple hs_tys) exp_kind
                     [] -> (liftedTypeKind, BoxedTuple)
          -- In the [] case, it's not clear what the kind is, so guess *
 
-       ; tys' <- sequence [ setSrcSpan loc $
+       ; tys' <- sequence [ setSrcSpanA loc $
                             checkExpectedKind hs_ty ty kind arg_kind
                           | ((L loc hs_ty),ty,kind) <- zip3 hs_tys tys kinds ]
 
@@ -1048,7 +1048,7 @@ since the two constraints should be semantically equivalent.
 
 splitHsAppTys :: HsType GhcRn -> Maybe (LHsType GhcRn, [LHsTypeArg GhcRn])
 splitHsAppTys hs_ty
-  | is_app hs_ty = Just (go (noLoc hs_ty) [])
+  | is_app hs_ty = Just (go (noLocA hs_ty) [])
   | otherwise    = Nothing
   where
     is_app :: HsType GhcRn -> Bool
@@ -1069,9 +1069,9 @@ splitHsAppTys hs_ty
            [HsArg (LHsType GhcRn) (LHsKind GhcRn)]) -- AZ temp
     go (L _  (HsAppTy _ f a))      as = go f (HsValArg a : as)
     go (L _  (HsAppKindTy l ty k)) as = go ty (HsTypeArg l k : as)
-    go (L sp (HsParTy _ f))        as = go f (HsArgPar sp : as)
+    go (L sp (HsParTy _ f))        as = go f (HsArgPar (locA sp) : as)
     go (L _  (HsOpTy _ l op@(L sp _) r)) as
-      = ( L (locA sp) (HsTyVar noAnn NotPromoted op)
+      = ( L sp (HsTyVar noAnn NotPromoted op)
         , HsValArg l : HsValArg r : as )
     go f as = (f, as)
 
@@ -3214,7 +3214,7 @@ tcPartialContext :: HsContext GhcRn -> TcM (TcThetaType, Maybe TcType)
 tcPartialContext hs_theta
   | Just (hs_theta1, hs_ctxt_last) <- snocView hs_theta
   , L wc_loc wc@(HsWildCardTy _) <- ignoreParens hs_ctxt_last
-  = do { wc_tv_ty <- setSrcSpan wc_loc $
+  = do { wc_tv_ty <- setSrcSpanA wc_loc $
                      tcAnonWildCardOcc wc constraintKind
        ; theta <- mapM tcLHsPredType hs_theta1
        ; return (theta, Just wc_tv_ty) }

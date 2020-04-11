@@ -142,7 +142,7 @@ sigNameNoLoc _                             = []
 -- instanceMap.
 getInstLoc :: InstDecl (GhcPass p) -> SrcSpan
 getInstLoc = \case
-  ClsInstD _ (ClsInstDecl { cid_poly_ty = ty }) -> getLoc (hsSigType ty)
+  ClsInstD _ (ClsInstDecl { cid_poly_ty = ty }) -> getLocA (hsSigType ty)
   DataFamInstD _ (DataFamInstDecl
     { dfid_eqn = HsIB { hsib_body = FamEqn { feqn_tycon = L l _ }}}) -> locA l
   TyFamInstD _ (TyFamInstDecl
@@ -150,7 +150,7 @@ getInstLoc = \case
     -- in particular, we need to dig a bit deeper to pull out the entire
     -- equation. This does not happen for data family instances, for some
     -- reason.
-    { tfid_eqn = HsIB { hsib_body = FamEqn { feqn_rhs = L l _ }}}) -> l
+    { tfid_eqn = HsIB { hsib_body = FamEqn { feqn_rhs = L l _ }}}) -> locA l
   ClsInstD _ (XClsInstDecl _) -> error "getInstLoc"
   DataFamInstD _ (DataFamInstDecl (HsIB _ (XFamEqn _))) -> error "getInstLoc"
   TyFamInstD _ (TyFamInstDecl (HsIB _ (XFamEqn _))) -> error "getInstLoc"
@@ -207,9 +207,9 @@ subordinates instMap decl = case decl of
             -- deriving (forall a. C a {- ^ Doc comment -})
             HsForAllTy{ hst_fvf = ForallInvis
                       , hst_body = L _ (HsDocTy _ _ doc) }
-                            -> Just (l, doc)
+                            -> Just (locA l, doc)
             -- deriving (C a {- ^ Doc comment -})
-            HsDocTy _ _ doc -> Just (l, doc)
+            HsDocTy _ _ doc -> Just (locA l, doc)
             _               -> Nothing
 
 -- | Extract constructor argument docs from inside constructor decls.

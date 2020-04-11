@@ -753,8 +753,7 @@ tcDataConPat penv (L con_span con_name) data_con pat_ty
         ; pat_ty <- readExpType pat_ty
 
           -- Add the stupid theta
-        ; setSrcSpan (locA con_span) $
-                                     addDataConStupidTheta data_con ctxt_res_tys
+        ; setSrcSpanA con_span $ addDataConStupidTheta data_con ctxt_res_tys
 
         ; let all_arg_tys = eqSpecPreds eq_spec ++ theta ++ arg_tys
         ; checkExistentials ex_tvs all_arg_tys penv

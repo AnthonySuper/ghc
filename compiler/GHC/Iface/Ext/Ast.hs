@@ -1288,7 +1288,7 @@ instance ToHie (LTyClDecl GhcRn) where
         ]
       SynDecl {tcdLName = name, tcdTyVars = vars, tcdRhs = typ} ->
         [ toHie $ C (Decl SynDec $ getRealSpan span) name
-        , toHie $ TS (ResolvedScopes [mkScope $ getLoc typ]) vars
+        , toHie $ TS (ResolvedScopes [mkScope $ getLocA typ]) vars
         , toHie typ
         ]
       DataDecl {tcdLName = name, tcdTyVars = vars, tcdDataDefn = defn} ->
@@ -1299,7 +1299,7 @@ instance ToHie (LTyClDecl GhcRn) where
         where
           quant_scope = mkLScopeA $ dd_ctxt defn
           rhs_scope = sig_sc `combineScopes` con_sc `combineScopes` deriv_sc
-          sig_sc = maybe NoScope mkLScope $ dd_kindSig defn
+          sig_sc = maybe NoScope mkLScopeA $ dd_kindSig defn
           con_sc = foldr combineScopes NoScope $ map mkLScope $ dd_cons defn
           deriv_sc = mkLScope $ dd_derivs defn
       ClassDecl { tcdCtxt = context
@@ -1442,7 +1442,7 @@ instance ToHie (LConDecl GhcRn) where
           rhsScope = combineScopes argsScope tyScope
           ctxScope = maybe NoScope mkLScopeA ctx
           argsScope = condecl_scope args
-          tyScope = mkLScope typ
+          tyScope = mkLScopeA typ
       ConDeclH98 { con_name = name, con_ex_tvs = qvars
                  , con_mb_cxt = ctx, con_args = dets } ->
         [ toHie $ C (Decl ConDec $ getRealSpan span) name
@@ -1456,8 +1456,8 @@ instance ToHie (LConDecl GhcRn) where
           argsScope = condecl_scope dets
       XConDecl nec -> noExtCon nec
     where condecl_scope args = case args of
-            PrefixCon xs -> foldr combineScopes NoScope $ map mkLScope xs
-            InfixCon a b -> combineScopes (mkLScope a) (mkLScope b)
+            PrefixCon xs -> foldr combineScopes NoScope $ map mkLScopeA xs
+            InfixCon a b -> combineScopes (mkLScopeA a) (mkLScopeA b)
             RecCon x -> mkLScope x
 
 instance ToHie (Located [LConDeclField GhcRn]) where
@@ -1545,9 +1545,9 @@ instance ToHie (LHsType GhcRn) where
   toHie x = toHie $ TS (ResolvedScopes []) x
 
 instance ToHie (TScoped (LHsType GhcRn)) where
-  toHie (TS tsc (L span t)) = concatM $ makeNode t span : case t of
+  toHie (TS tsc (L span t)) = concatM $ makeNode t (locA span) : case t of
       HsForAllTy _ _ bndrs body ->
-        [ toHie $ tvScopes tsc (mkScope $ getLoc body) bndrs
+        [ toHie $ tvScopes tsc (mkScope $ getLocA body) bndrs
         , toHie body
         ]
       HsQualTy _ ctx body ->
@@ -1595,7 +1595,7 @@ instance ToHie (TScoped (LHsType GhcRn)) where
         , toHie b
         ]
       HsSpliceTy _ a ->
-        [ toHie $ L span a
+        [ toHie $ L (locA span) a
         ]
       HsDocTy _ a _ ->
         [ toHie a

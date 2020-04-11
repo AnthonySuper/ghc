@@ -484,7 +484,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
     --
     checkCanonicalMonadInstances
       | cls == applicativeClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpanA loc $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -499,7 +499,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
                   _ -> return ()
 
       | cls == monadClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpanA loc $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -530,7 +530,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
     --
     checkCanonicalMonoidInstances
       | cls == semigroupClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpanA loc $ do
               case mbind of
                   FunBind { fun_id      = L _ name
                           , fun_matches = mg }
@@ -541,7 +541,7 @@ checkCanonicalInstances cls poly_ty mbinds = do
                   _ -> return ()
 
       | cls == monoidClassName  = do
-          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpan (locA loc) $ do
+          forM_ (bagToList mbinds) $ \(L loc mbind) -> setSrcSpanA loc $ do
               case mbind of
                   FunBind { fun_id = L _ name
                           , fun_matches = mg }
@@ -626,7 +626,7 @@ rnClsInstDecl (ClsInstDecl { cid_poly_ty = inst_ty, cid_binds = mbinds
                -- Importantly, this error should be thrown before we reach the
                -- typechecker, lest we encounter different errors that are
                -- hopelessly confusing (such as the one in #16114).
-               addErrAt (getLoc (hsSigType inst_ty)) $
+               addErrAt (getLocA (hsSigType inst_ty)) $
                  hang (text "Illegal class instance:" <+> quotes (ppr inst_ty))
                     2 (vcat [ text "Class instances must be of the form"
                             , nest 2 $ text "context => C ty_1 ... ty_n"
@@ -980,7 +980,7 @@ rnSrcDerivDecl (DerivDecl _ ty mds overlap)
        ; (mds', ty', fvs)
            <- rnLDerivStrategy DerivDeclCtx mds $
               rnHsSigWcType BindUnlessForall DerivDeclCtx ty
-       ; warnNoDerivStrat mds' loc
+       ; warnNoDerivStrat mds' (locA loc)
        ; return (DerivDecl noAnn ty' mds' overlap, fvs) }
   where
     loc = getLoc $ hsib_body $ hswc_body ty

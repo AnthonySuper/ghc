@@ -703,7 +703,7 @@ tcPolyCheck prag_fn
             <- checkConstraints skol_info skol_tvs ev_vars $
                tcExtendBinderStack [TcIdBndr mono_id NotTopLevel]  $
                tcExtendNameTyVarEnv tv_prs $
-               setSrcSpan (locA loc)       $
+               setSrcSpanA loc             $
                tcMatchesFun (L nm_loc mono_name) matches (mkCheckExpType tau)
 
        ; let prag_sigs = lookupPragEnv prag_fn name
@@ -1261,7 +1261,7 @@ tcMonoBinds is_rec sig_fn no_gen
         -- and *then* make the monomorphic Id for the LHS
         -- e.g.         f = \(x::forall a. a->a) -> <body>
         --      We want to infer a higher-rank type for f
-    setSrcSpan (locA b_loc)    $
+    setSrcSpanA b_loc      $
     do  { ((co_fn, matches'), rhs_ty)
             <- tcInferInst $ \ exp_ty ->
                   -- tcInferInst: see TcUnify,

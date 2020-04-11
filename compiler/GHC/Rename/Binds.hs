@@ -451,7 +451,7 @@ rnLBind :: (Name -> [Name])      -- Signature tyvar function
         -> LHsBindLR GhcRn GhcPs
         -> RnM (LHsBind GhcRn, [Name], Uses)
 rnLBind sig_fn (L loc bind)
-  = setSrcSpan (locA loc) $
+  = setSrcSpanA loc $
     do { (bind', bndrs, dus) <- rnBind sig_fn bind
        ; return (L loc bind', bndrs, dus) }
 
@@ -900,7 +900,7 @@ rnMethodBindLHS :: Bool -> Name
                 -> LHsBindsLR GhcRn GhcPs
                 -> RnM (LHsBindsLR GhcRn GhcPs)
 rnMethodBindLHS _ cls (L loc bind@(FunBind { fun_id = name })) rest
-  = setSrcSpan (locA loc) $ do
+  = setSrcSpanA loc $ do
     do { sel_name <- wrapLocMA (lookupInstDeclBndr cls (text "method")) name
                      -- We use the selector name as the binder
        ; let bind' = bind { fun_id = sel_name, fun_ext = noAnn }
@@ -1280,7 +1280,7 @@ rnSrcFixityDecl sig_ctxt = rn_decl
 
     lookup_one :: LocatedA RdrName -> RnM [LocatedA Name]
     lookup_one (L name_loc rdr_name)
-      = setSrcSpan (locA name_loc) $
+      = setSrcSpanA name_loc $
                     -- This lookup will fail if the name is not defined in the
                     -- same binding group as this fixity declaration.
         do names <- lookupLocalTcNames sig_ctxt what rdr_name

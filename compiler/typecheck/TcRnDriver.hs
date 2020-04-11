@@ -2444,7 +2444,7 @@ getGhciStepIO = do
     let ghciM   = nlHsAppTy (nlHsTyVar ghciTy) (nlHsTyVar a_tv)
         ioM     = nlHsAppTy (nlHsTyVar ioTyConName) (nlHsTyVar a_tv)
 
-        step_ty = noLoc $ HsForAllTy
+        step_ty = noLocA $ HsForAllTy
                      { hst_fvf = ForallInvis
                      , hst_bndrs = [noLoc $ UserTyVar noAnn (noLocA a_tv)]
                      , hst_xforall = noAnn
@@ -2718,7 +2718,7 @@ tcRnLookupRdrName :: HscEnv -> LocatedA RdrName
 -- ^ Find all the Names that this RdrName could mean, in GHCi
 tcRnLookupRdrName hsc_env (L loc rdr_name)
   = runTcInteractive hsc_env $
-    setSrcSpan (locA loc)    $
+    setSrcSpanA loc          $
     do {   -- If the identifier is a constructor (begins with an
            -- upper-case letter), then we need to consider both
            -- constructor and type class identifiers.

@@ -1274,7 +1274,7 @@ repLTy ty = repTy (unLoc ty)
 -- handled separately in repTy.
 repForallT :: HsType GhcRn -> MetaM (Core (M TH.Type))
 repForallT ty
- | (tvs, ctxt, tau) <- splitLHsSigmaTyInvis (noLoc ty)
+ | (tvs, ctxt, tau) <- splitLHsSigmaTyInvis (noLocA ty)
  = addHsTyVarBinds tvs $ \bndrs ->
    do { ctxt1  <- repLContext ctxt
       ; tau1   <- repLTy tau
