@@ -40,6 +40,7 @@ module GHC.Hs.Decls (
   tyClDeclLName, tyClDeclTyVars,
   hsDeclHasCusk, famResultKindSignature,
   FamilyDecl(..), LFamilyDecl,
+  FunDep(..),
 
   -- ** Instance declarations
   InstDecl(..), LInstDecl, FamilyInfo(..),
@@ -112,7 +113,7 @@ import GHC.Hs.Extension
 import GHC.Types.Name.Set
 
 -- others:
-import GHC.Core.Class
+-- import GHC.Core.Class
 import Outputable
 import Util
 import GHC.Types.SrcLoc
@@ -605,9 +606,18 @@ data TyClDecl pass
         --                          'ApiAnnotation.AnnRarrow'
 
         -- For details on above see note [Api annotations] in ApiAnnotation
-  | XTyClDecl (XXTyClDecl pass)
+  | XTyClDecl !(XXTyClDecl pass)
 
-type LHsFunDep pass = Located (FunDep (LocatedA (IdP pass)))
+data FunDep pass
+  = FunDep (XCFunDep pass)
+           [(LocatedA (IdP pass))]
+           [(LocatedA (IdP pass))]
+  | XFunDep !(XXFunDep pass)
+
+type LHsFunDep pass = LocatedA (FunDep pass)
+
+type instance XCFunDep    (GhcPass _) = ApiAnn
+type instance XXFunDep    (GhcPass _) = NoExtCon
 
 data DataDeclRn = DataDeclRn
              { tcdDataCusk :: Bool    -- ^ does this have a CUSK?
@@ -720,7 +730,6 @@ tyClDeclLName (FamDecl { tcdFam = fd })     = familyDeclLName fd
 tyClDeclLName (SynDecl { tcdLName = ln })   = ln
 tyClDeclLName (DataDecl { tcdLName = ln })  = ln
 tyClDeclLName (ClassDecl { tcdLName = ln }) = ln
-tyClDeclLName (XTyClDecl nec) = noExtCon nec
 
 tcdName :: TyClDecl (GhcPass p) -> IdP (GhcPass p)
 tcdName = unLoc . tyClDeclLName
@@ -760,7 +769,6 @@ hsDeclHasCusk (SynDecl { tcdTyVars = tyvars, tcdRhs = rhs })
 hsDeclHasCusk (DataDecl { tcdDExt = DataDeclRn { tcdDataCusk = cusk }}) = cusk
 hsDeclHasCusk (ClassDecl { tcdTyVars = tyvars }) = hsTvbAllKinded tyvars
 hsDeclHasCusk (FamDecl { tcdFam = XFamilyDecl nec }) = noExtCon nec
-hsDeclHasCusk (XTyClDecl nec) = noExtCon nec
 
 -- Pretty-printing TyClDecl
 -- ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -796,7 +804,6 @@ instance (OutputableBndrId p) => Outputable (TyClDecl (GhcPass p)) where
                     <+> pp_vanilla_decl_head lclas tyvars fixity context
                     <+> pprFundeps (map unLoc fds)
 
-    ppr (XTyClDecl x) = ppr x
 
 instance OutputableBndrId p
        => Outputable (TyClGroup (GhcPass p)) where
@@ -846,8 +853,16 @@ pprTyClDeclFlavour (DataDecl { tcdDataDefn = HsDataDefn { dd_ND = nd } })
   = ppr nd
 pprTyClDeclFlavour (DataDecl { tcdDataDefn = XHsDataDefn x })
   = ppr x
-pprTyClDeclFlavour (XTyClDecl x) = ppr x
 
+instance Outputable (IdGhcP p) => Outputable (FunDep (GhcPass p)) where
+  ppr = pprFunDep
+
+pprFundeps :: Outputable (IdGhcP p) => [FunDep (GhcPass p)] -> SDoc
+pprFundeps []  = empty
+pprFundeps fds = hsep (vbar : punctuate comma (map pprFunDep fds))
+
+pprFunDep :: Outputable (IdGhcP p) => FunDep (GhcPass p) -> SDoc
+pprFunDep (FunDep _ us vs) = hsep [interppSP us, arrow, interppSP vs]
 
 {- Note [CUSKs: complete user-supplied kind signatures]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -1681,7 +1681,6 @@ rnTyClDecl (ClassDecl { tcdCtxt = context, tcdLName = lcls,
   where
     cls_doc  = ClassDeclCtx lcls
 
-rnTyClDecl (XTyClDecl nec) = noExtCon nec
 
 -- Does the data type declaration include a CUSK?
 data_decl_has_cusk :: LHsQTyVars pass -> NewOrData -> Bool -> Maybe (LHsKind pass') -> RnM Bool
@@ -2241,12 +2240,13 @@ extendPatSynEnv val_decls local_fix_env thing = do {
 
 rnFds :: [LHsFunDep GhcPs] -> RnM [LHsFunDep GhcRn]
 rnFds fds
-  = mapM (wrapLocM rn_fds) fds
+  = mapM (wrapLocMA rn_fds) fds
   where
-    rn_fds (tys1, tys2)
+    rn_fds :: FunDep GhcPs -> RnM (FunDep GhcRn)
+    rn_fds (FunDep x tys1 tys2)
       = do { tys1' <- rnHsTyVars tys1
            ; tys2' <- rnHsTyVars tys2
-           ; return (tys1', tys2') }
+           ; return (FunDep x tys1' tys2') }
 
 rnHsTyVars :: [LocatedA RdrName] -> RnM [LocatedA Name]
 rnHsTyVars tvs  = mapM rnHsTyVar tvs

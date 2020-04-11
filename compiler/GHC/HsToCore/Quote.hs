@@ -480,8 +480,6 @@ repTyClD (L loc (ClassDecl { tcdCtxt = cxt, tcdLName = cls,
        ; return $ Just (loc, dec)
        }
 
-repTyClD (L _ (XTyClDecl nec)) = noExtCon nec
-
 -------------------------
 repRoleD :: LRoleAnnotDecl GhcRn -> MetaM (SrcSpan, Core (M TH.Dec))
 repRoleD (L loc (RoleAnnotDecl _ tycon roles))
@@ -617,7 +615,7 @@ repLFunDeps :: [LHsFunDep GhcRn] -> MetaM (Core [TH.FunDep])
 repLFunDeps fds = repList funDepTyConName repLFunDep fds
 
 repLFunDep :: LHsFunDep GhcRn -> MetaM (Core TH.FunDep)
-repLFunDep (L _ (xs, ys))
+repLFunDep (L _ (FunDep _ xs ys))
    = do xs' <- repList nameTyConName (lookupBinder . unLoc) xs
         ys' <- repList nameTyConName (lookupBinder . unLoc) ys
         repFunDep xs' ys'

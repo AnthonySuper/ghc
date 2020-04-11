@@ -2058,7 +2058,7 @@ tcClassDecl1 roles_info class_name hs_ctxt meths fundeps sigs ats at_defs
                -- The checkTvConstraints is needed bring into scope the
                -- skolems bound by the class decl header (#17841)
                do { ctxt <- tcHsContext hs_ctxt
-                  ; fds  <- mapM (addLocM tc_fundep) fundeps
+                  ; fds  <- mapM (addLocMA tc_fundep) fundeps
                   ; sig_stuff <- tcClassSigs class_name sigs meths
                   ; at_stuff  <- tcClassATs class_name clas ats at_defs
                   ; return (ctxt, fds, sig_stuff, at_stuff) }
@@ -2090,9 +2090,11 @@ tcClassDecl1 roles_info class_name hs_ctxt meths fundeps sigs ats at_defs
        ; return clas }
   where
     skol_info = TyConSkol ClassFlavour class_name
-    tc_fundep (tvs1, tvs2) = do { tvs1' <- mapM (tcLookupTyVar . unLoc) tvs1 ;
+    -- tc_fundep :: GHC.Hs.FunDep GhcRn -> TcM ([Var],[Var]) -- AZ
+    tc_fundep (FunDep x tvs1 tvs2)
+                           = do { tvs1' <- mapM (tcLookupTyVar . unLoc) tvs1 ;
                                 ; tvs2' <- mapM (tcLookupTyVar . unLoc) tvs2 ;
-                                ; return (tvs1', tvs2') }
+                                ; return (tvs1',tvs2') }
 
 
 {- Note [Associated type defaults]

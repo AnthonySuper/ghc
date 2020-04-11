@@ -501,6 +501,11 @@ type family XClassDecl     x
 type family XXTyClDecl     x
 
 -- -------------------------------------
+-- FunDep type families
+type family XCFunDep      x
+type family XXFunDep      x
+
+-- -------------------------------------
 -- TyClGroup type families
 type family XCTyClGroup      x
 type family XXTyClGroup      x

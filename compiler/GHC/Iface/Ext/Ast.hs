@@ -22,7 +22,6 @@ import GHC.Types.Avail            ( Avails )
 import Bag                        ( Bag, bagToList )
 import GHC.Types.Basic
 import BooleanFormula
-import GHC.Core.Class             ( FunDep )
 import GHC.Core.Utils             ( exprType )
 import GHC.Core.ConLike           ( conLikeName )
 import GHC.HsToCore               ( deSugarExpr )
@@ -1325,7 +1324,6 @@ instance ToHie (LTyClDecl GhcRn) where
           context_scope = mkLScopeA context
           rhs_scope = foldl1' combineScopes $ map mkScope
             [ loc deps, loc sigs, loc (bagToList meths), loc typs, loc deftyps]
-      XTyClDecl nec -> noExtCon nec
 
 instance ToHie (LFamilyDecl GhcRn) where
   toHie (L span decl) = concatM $ makeNode decl span : case decl of
@@ -1363,9 +1361,9 @@ instance ToHie (RScoped (LFamilyResultSig GhcRn)) where
         ]
       XFamilyResultSig nec -> noExtCon nec
 
-instance ToHie (Located (FunDep (LocatedA Name))) where
-  toHie (L span fd@(lhs, rhs)) = concatM $
-    [ makeNode fd span
+instance ToHie (LHsFunDep GhcRn) where
+  toHie (L span fd@(FunDep _ lhs rhs)) = concatM $
+    [ makeNode fd (locA span)
     , toHie $ map (C Use) lhs
     , toHie $ map (C Use) rhs
     ]

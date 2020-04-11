@@ -2017,8 +2017,6 @@ type :: { LHsType GhcPs }
         : btype                        { $1 }
         | btype '->' ctype             {% amsA $1 [mu AnnRarrow $2] -- See note [GADT decl discards annotations]
                                        >> acsA (\cs -> sLLAA $1 $> $ HsFunTy (ApiAnn [mu AnnRarrow $2] cs) $1 $3) }
--- AZ working above
-
 
 typedoc :: { LHsType GhcPs }
         : btype                          { $1 }
@@ -2092,8 +2090,6 @@ atype :: { LHsType GhcPs }
                                             acsA (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mop $1,mcp $5] cs)
 
                                              HsBoxedOrConstraintTuple ($2 : $4)) }
--- AZ working above
-
         | '(#' '#)'                   {% acsA (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mo $1,mc $2] cs) HsUnboxedTuple []) }
         | '(#' comma_types1 '#)'      {% acsA (\cs -> sLL $1 $> $ HsTupleTy (ApiAnn [mo $1,mc $3] cs) HsUnboxedTuple $2) }
         | '(#' bar_types2 '#)'        {% acsA (\cs -> sLL $1 $> $ HsSumTy (ApiAnn [mo $1,mc $3] cs) $2) }
@@ -2113,9 +2109,8 @@ atype :: { LHsType GhcPs }
         -- if you had written '[ty, ty, ty]
         -- (One means a list type, zero means the list type constructor,
         -- so you have to quote those.)
-        | '[' ktype ',' comma_types1 ']'  {% addAnnotation (glA $2) AnnComma
-                                                           (gl $3) >>
-                                             acsA (\cs -> sLL $1 $> $ HsExplicitListTy (ApiAnn [mos $1,mcs $5] cs) NotPromoted ($2 : $4)) }
+        | '[' ktype ',' comma_types1 ']'  {% do { h <- addAnnotationA $2 AnnComma (gl $3)
+                                                ; acsA (\cs -> sLL $1 $> $ HsExplicitListTy (ApiAnn [mos $1,mcs $5] cs) NotPromoted (h:$4)) }}
         | INTEGER              { reLocA $ sLL $1 $> $ HsTyLit noExtField $ HsNumTy (getINTEGERs $1)
                                                            (il_value (getINTEGER $1)) }
         | STRING               { reLocA $ sLL $1 $> $ HsTyLit noExtField $ HsStrTy (getSTRINGs $1)
@@ -2131,8 +2126,8 @@ inst_type :: { LHsSigType GhcPs }
 deriv_types :: { [LHsSigType GhcPs] }
         : ktypedoc                      { [mkLHsSigType $1] }
 
-        | ktypedoc ',' deriv_types      {% addAnnotation (glA $1) AnnComma (gl $2)
-                                           >> return (mkLHsSigType $1 : $3) }
+        | ktypedoc ',' deriv_types      {% do { h <- addAnnotationA $1 AnnComma (gl $2)
+                                              ; return (mkLHsSigType h : $3) } }
 
 comma_types0  :: { [LHsType GhcPs] }  -- Zero or more:  ty,ty,ty
         : comma_types1                  { $1 }
@@ -2140,14 +2135,14 @@ comma_types0  :: { [LHsType GhcPs] }  -- Zero or more:  ty,ty,ty
 
 comma_types1    :: { [LHsType GhcPs] }  -- One or more:  ty,ty,ty
         : ktype                        { [$1] }
-        | ktype  ',' comma_types1      {% addAnnotation (glA $1) AnnComma (gl $2)
-                                          >> return ($1 : $3) }
+        | ktype  ',' comma_types1      {% do { h <- addAnnotationA $1 AnnComma (gl $2)
+                                             ; return (h : $3) }}
 
 bar_types2    :: { [LHsType GhcPs] }  -- Two or more:  ty|ty|ty
-        : ktype  '|' ktype             {% addAnnotation (glA $1) AnnVbar (gl $2)
-                                          >> return [$1,$3] }
-        | ktype  '|' bar_types2        {% addAnnotation (glA $1) AnnVbar (gl $2)
-                                          >> return ($1 : $3) }
+        : ktype  '|' ktype             {% do { h <- addAnnotationA $1 AnnVbar (gl $2)
+                                             ; return [h,$3] }}
+        | ktype  '|' bar_types2        {% do { h <- addAnnotationA $1 AnnVbar (gl $2)
+                                             ; return (h : $3) }}
 
 tv_bndrs :: { [LHsTyVarBndr GhcPs] }
          : tv_bndr tv_bndrs             { $1 : $2 }
@@ -2157,20 +2152,25 @@ tv_bndr :: { LHsTyVarBndr GhcPs }
         : tyvar                         { sL1A $1 (UserTyVar noAnn $1) }
         | '(' tyvar '::' kind ')'       {% acs (\cs -> sLL $1 $>  (KindedTyVar (ApiAnn [mop $1,mu AnnDcolon $3,mcp $5] cs) $2 $4)) }
 
-fds :: { Located ([AddApiAnn],[Located (FunDep (LocatedA RdrName))]) }
+fds :: { Located ([AddApiAnn],[LHsFunDep GhcPs]) }
         : {- empty -}                   { noLoc ([],[]) }
         | '|' fds1                      { (sLL $1 $> ([mj AnnVbar $1]
                                                  ,reverse (unLoc $2))) }
 
-fds1 :: { Located [Located (FunDep (LocatedA RdrName))] }
-        : fds1 ',' fd   {% addAnnotation (gl $ head $ unLoc $1) AnnComma (gl $2)
-                           >> return (sLL $1 $> ($3 : unLoc $1)) }
-        | fd            { sL1 $1 [$1] }
+fds1 :: { Located [LHsFunDep GhcPs] }
+        : fds1 ',' fd   {%
+                           do { let (h:t) = unLoc $1 -- Safe from fds1 rules
+                              ; h' <- addAnnotationA h AnnComma (gl $2)
+                              ; return (sLLlA $1 $> ($3 : h' : t)) }}
+        | fd            { sL1A $1 [$1] }
 
-fd :: { Located (FunDep (LocatedA RdrName)) }
-        : varids0 '->' varids0  {% ams (\_ -> L (comb3 $1 $2 $3)
-                                       (reverse (unLoc $1), reverse (unLoc $3)))
-                                       [mu AnnRarrow $2] }
+fd :: { LHsFunDep GhcPs }
+        : varids0 '->' varids0  {% acsA (\cs -> L (comb3 $1 $2 $3)
+                                       (FunDep (ApiAnn [mu AnnRarrow $2] cs)
+                                               (reverse (unLoc $1))
+                                               (reverse (unLoc $3)))) }
+-- AZ working above
+
 
 varids0 :: { Located [LocatedA RdrName] }
         : {- empty -}                   { noLoc [] }

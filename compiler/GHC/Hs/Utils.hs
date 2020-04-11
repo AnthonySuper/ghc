@@ -1207,7 +1207,6 @@ hsLTyClDeclBinders (L loc (DataDecl    { tcdLName = (L _ name)
                                        , tcdDataDefn = defn }))
   = (\ (xs, ys) -> (L (noAnnSrcSpan loc) name : xs, ys))
                                                         $ hsDataDefnBinders defn
-hsLTyClDeclBinders (L _ (XTyClDecl nec)) = noExtCon nec
 
 
 -------------------
