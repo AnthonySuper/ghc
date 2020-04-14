@@ -1075,8 +1075,9 @@ tcInstDecl2 (InstInfo { iSpec = ispec, iBinds = ibinds })
        -- Create the result bindings
        ; self_dict <- newDict clas inst_tys
        ; let class_tc      = classTyCon clas
+             loc'          = noAnnSrcSpan loc
              [dict_constr] = tyConDataCons class_tc
-             dict_bind     = mkVarBind self_dict (L loc con_app_args)
+             dict_bind = mkVarBind self_dict (L loc' con_app_args)
 
                      -- We don't produce a binding for the dict_constr; instead we
                      -- rely on the simplifier to unfold this saturated application
@@ -1095,8 +1096,8 @@ tcInstDecl2 (InstInfo { iSpec = ispec, iBinds = ibinds })
              con_app_args = foldl' app_to_meth con_app_tys sc_meth_ids
 
              app_to_meth :: HsExpr GhcTc -> Id -> HsExpr GhcTc
-             app_to_meth fun meth_id = HsApp noComments (L loc fun)
-                                            (L loc (wrapId arg_wrapper meth_id))
+             app_to_meth fun meth_id = HsApp noComments (L loc' fun)
+                                            (L loc' (wrapId arg_wrapper meth_id))
 
              inst_tv_tys = mkTyVarTys inst_tyvars
              arg_wrapper = mkWpEvVarApps dfun_ev_vars <.> mkWpTyApps inst_tv_tys
@@ -1123,7 +1124,7 @@ tcInstDecl2 (InstInfo { iSpec = ispec, iBinds = ibinds })
                                   , abs_binds = unitBag dict_bind
                                   , abs_sig = True }
 
-       ; return (unitBag (L (noAnnSrcSpan loc) main_bind)
+       ; return (unitBag (L loc' main_bind)
                   `unionBags` sc_meth_binds)
        }
  where
@@ -1561,12 +1562,15 @@ tcMethods dfun_id clas tyvars dfun_ev_vars inst_tys
                              mkLHsWrap lam_wrapper (error_rhs dflags)
            ; return (meth_id, meth_bind, Nothing) }
       where
-        error_rhs dflags = L inst_loc $ HsApp noComments error_fun (error_msg dflags)
-        error_fun    = L inst_loc $
+        inst_loc' = noAnnSrcSpan inst_loc
+        error_rhs dflags = L inst_loc'
+                                 $ HsApp noComments error_fun (error_msg dflags)
+        error_fun    = L inst_loc' $
                        wrapId (mkWpTyApps
                                 [ getRuntimeRep meth_tau, meth_tau])
                               nO_METHOD_BINDING_ERROR_ID
-        error_msg dflags = L inst_loc (HsLit noComments (HsStringPrim NoSourceText
+        error_msg dflags = L inst_loc'
+                                    (HsLit noComments (HsStringPrim NoSourceText
                                               (unsafeMkByteString (error_string dflags))))
         meth_tau     = funResultTy (piResultTys (idType sel_id) inst_tys)
         error_string dflags = showSDoc dflags
@@ -1917,7 +1921,7 @@ mkDefMethBind clas inst_tys sel_id dm_name
        ; return (bind, inline_prags) }
   where
     mk_vta :: LHsExpr GhcRn -> Type -> LHsExpr GhcRn
-    mk_vta fun ty = noLoc (HsAppType noComments fun (mkEmptyWildCardBndrs $ nlHsParTy
+    mk_vta fun ty = noLocA (HsAppType noComments fun (mkEmptyWildCardBndrs $ nlHsParTy
                                                 $ noLocA $ XHsType $ NHsCoreTy ty))
        -- NB: use visible type application
        -- See Note [Default methods in instances]

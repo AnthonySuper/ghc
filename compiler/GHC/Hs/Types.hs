@@ -859,7 +859,7 @@ data HsTupleSort = HsUnboxedTuple
                  deriving Data
 
 -- | Located Constructor Declaration Field
-type LConDeclField pass = Located (ConDeclField pass)
+type LConDeclField pass = LocatedA (ConDeclField pass)
       -- ^ May have 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnComma' when
       --   in a list
 
@@ -877,7 +877,7 @@ data ConDeclField pass  -- Record fields have Haddock docs on them
       -- For details on above see note [Api annotations] in ApiAnnotation
   | XConDeclField (XXConDeclField pass)
 
-type instance XConDeclField  (GhcPass _) = NoExtField
+type instance XConDeclField  (GhcPass _) = ApiAnn
 type instance XXConDeclField (GhcPass _) = NoExtCon
 
 instance OutputableBndrId p

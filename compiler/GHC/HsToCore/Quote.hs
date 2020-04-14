@@ -1409,7 +1409,7 @@ repLEs es = repListM expTyConName repLE es
 --        unless we can make sure that constructs, which are plainly not
 --        supported in TH already lead to error messages at an earlier stage
 repLE :: LHsExpr GhcRn -> MetaM (Core (M TH.Exp))
-repLE (L loc e) = mapReaderT (putSrcSpanDs loc) (repE e)
+repLE (L loc e) = mapReaderT (putSrcSpanDs (locA loc)) (repE e)
 
 repE :: HsExpr GhcRn -> MetaM (Core (M TH.Exp))
 repE (HsVar _ (L _ x)) =

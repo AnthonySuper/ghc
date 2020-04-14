@@ -3,7 +3,6 @@ import GHC.Types.Name
 import GHC.Hs
 import GHC.Types.Name.Set ( FreeVars )
 import TcRnTypes
-import GHC.Types.SrcLoc   ( Located )
 import Outputable  ( Outputable )
 
 rnLExpr :: LHsExpr GhcPs
@@ -11,7 +10,7 @@ rnLExpr :: LHsExpr GhcPs
 
 rnStmts :: --forall thing body.
            Outputable (body GhcPs) => HsStmtContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-        -> [LStmt GhcPs (Located (body GhcPs))]
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+        -> [LStmt GhcPs (LocatedA (body GhcPs))]
         -> ([Name] -> RnM (thing, FreeVars))
-        -> RnM (([LStmt GhcRn (Located (body GhcRn))], thing), FreeVars)
+        -> RnM (([LStmt GhcRn (LocatedA (body GhcRn))], thing), FreeVars)

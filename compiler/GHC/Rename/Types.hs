@@ -1026,7 +1026,7 @@ rnField fl_env env (L l (ConDeclField _ names ty haddock_doc))
   = do { let new_names = map (fmap lookupField) names
        ; (new_ty, fvs) <- rnLHsTyKi env ty
        ; new_haddock_doc <- rnMbLHsDoc haddock_doc
-       ; return (L l (ConDeclField noExtField new_names new_ty new_haddock_doc)
+       ; return (L l (ConDeclField noAnn new_names new_ty new_haddock_doc)
                 , fvs) }
   where
     lookupField :: FieldOcc GhcPs -> FieldOcc GhcRn
@@ -1118,7 +1118,7 @@ mkOpAppRn e1@(L _ (OpApp fix1 e11 op1 e12)) op2 fix2 e2
     new_e <- mkOpAppRn e12 op2 fix2 e2
     return (OpApp fix1 e11 op1 (L loc' new_e))
   where
-    loc'= combineLocs e12 e2
+    loc'= combineLocsA e12 e2
     (nofix_error, associate_right) = compareFixity fix1 fix2
 
 ---------------------------
@@ -1132,7 +1132,7 @@ mkOpAppRn e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
   = do new_e <- mkOpAppRn neg_arg op2 fix2 e2
        return (NegApp noExtField (L loc' new_e) neg_name)
   where
-    loc' = combineLocs neg_arg e2
+    loc' = combineLocsA neg_arg e2
     (nofix_error, associate_right) = compareFixity negateFixity fix2
 
 ---------------------------
@@ -1216,7 +1216,7 @@ mkOpFormRn a1@(L loc
   | associate_right
   = do new_c <- mkOpFormRn a12 op2 fix2 a2
        return (HsCmdArrForm noExtField op1 f (Just fix1)
-               [a11, L loc (HsCmdTop [] (L loc new_c))])
+               [a11, L loc (HsCmdTop [] (L (noAnnSrcSpan loc) new_c))])
         -- TODO: locs are wrong
   where
     (nofix_error, associate_right) = compareFixity fix1 fix2
@@ -1265,7 +1265,7 @@ checkPrecMatch op (MG { mg_alts = (L _ ms) })
     check (L _ (Match { m_pats = (L l1 p1)
                                : (L l2 p2)
                                : _ }))
-      = setSrcSpan (combineSrcSpans l1 l2) $
+      = setSrcSpan (locA $ combineSrcSpansA l1 l2) $
         do checkPrec op p1 False
            checkPrec op p2 True
 

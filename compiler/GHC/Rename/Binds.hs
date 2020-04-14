@@ -1167,9 +1167,9 @@ checkDupMinimalSigs sigs
 -}
 
 rnMatchGroup :: Outputable (body GhcPs) => HsMatchContext Name
-             -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-             -> MatchGroup GhcPs (Located (body GhcPs))
-             -> RnM (MatchGroup GhcRn (Located (body GhcRn)), FreeVars)
+             -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+             -> MatchGroup GhcPs (LocatedA (body GhcPs))
+             -> RnM (MatchGroup GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnMatchGroup ctxt rnBody (MG { mg_alts = L _ ms, mg_origin = origin })
   = do { empty_case_ok <- xoptM LangExt.EmptyCase
        ; when (null ms && not empty_case_ok) (addErr (emptyCaseErr ctxt))
@@ -1178,15 +1178,15 @@ rnMatchGroup ctxt rnBody (MG { mg_alts = L _ ms, mg_origin = origin })
 rnMatchGroup _ _ (XMatchGroup nec) = noExtCon nec
 
 rnMatch :: Outputable (body GhcPs) => HsMatchContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-        -> LMatch GhcPs (Located (body GhcPs))
-        -> RnM (LMatch GhcRn (Located (body GhcRn)), FreeVars)
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+        -> LMatch GhcPs (LocatedA (body GhcPs))
+        -> RnM (LMatch GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnMatch ctxt rnBody = wrapLocFstM (rnMatch' ctxt rnBody)
 
 rnMatch' :: Outputable (body GhcPs) => HsMatchContext Name
-         -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-         -> Match GhcPs (Located (body GhcPs))
-         -> RnM (Match GhcRn (Located (body GhcRn)), FreeVars)
+         -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+         -> Match GhcPs (LocatedA (body GhcPs))
+         -> RnM (Match GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnMatch' ctxt rnBody (Match { m_ctxt = mf, m_pats = pats, m_grhss = grhss })
   = do  { -- Note that there are no local fixity decls for matches
         ; rnPats ctxt pats      $ \ pats' -> do
@@ -1195,7 +1195,7 @@ rnMatch' ctxt rnBody (Match { m_ctxt = mf, m_pats = pats, m_grhss = grhss })
                       (FunRhs { mc_fun = L _ funid }, FunRhs { mc_fun = L lf _ })
                                             -> mf { mc_fun = L lf funid }
                       _                     -> ctxt
-        ; return (Match { m_ext = noExtField, m_ctxt = mf', m_pats = pats'
+        ; return (Match { m_ext = noAnn, m_ctxt = mf', m_pats = pats'
                         , m_grhss = grhss'}, grhss_fvs ) }}
 rnMatch' _ _ (XMatch nec) = noExtCon nec
 
@@ -1217,9 +1217,9 @@ emptyCaseErr ctxt = hang (text "Empty list of alternatives in" <+> pp_ctxt)
 -}
 
 rnGRHSs :: HsMatchContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-        -> GRHSs GhcPs (Located (body GhcPs))
-        -> RnM (GRHSs GhcRn (Located (body GhcRn)), FreeVars)
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+        -> GRHSs GhcPs (LocatedA (body GhcPs))
+        -> RnM (GRHSs GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnGRHSs ctxt rnBody (GRHSs _ grhss (L l binds))
   = rnLocalBindsAndThen binds   $ \ binds' _ -> do
     (grhss', fvGRHSs) <- mapFvRn (rnGRHS ctxt rnBody) grhss
@@ -1227,15 +1227,15 @@ rnGRHSs ctxt rnBody (GRHSs _ grhss (L l binds))
 rnGRHSs _ _ (XGRHSs nec) = noExtCon nec
 
 rnGRHS :: HsMatchContext Name
-       -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-       -> LGRHS GhcPs (Located (body GhcPs))
-       -> RnM (LGRHS GhcRn (Located (body GhcRn)), FreeVars)
+       -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+       -> LGRHS GhcPs (LocatedA (body GhcPs))
+       -> RnM (LGRHS GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnGRHS ctxt rnBody = wrapLocFstM (rnGRHS' ctxt rnBody)
 
 rnGRHS' :: HsMatchContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-        -> GRHS GhcPs (Located (body GhcPs))
-        -> RnM (GRHS GhcRn (Located (body GhcRn)), FreeVars)
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+        -> GRHS GhcPs (LocatedA (body GhcPs))
+        -> RnM (GRHS GhcRn (LocatedA (body GhcRn)), FreeVars)
 rnGRHS' ctxt rnBody (GRHS _ guards rhs)
   = do  { pattern_guards_allowed <- xoptM LangExt.PatternGuards
         ; ((guards', rhs'), fvs) <- rnStmts (PatGuard ctxt) rnLExpr guards $ \ _ ->
@@ -1244,7 +1244,7 @@ rnGRHS' ctxt rnBody (GRHS _ guards rhs)
         ; unless (pattern_guards_allowed || is_standard_guard guards')
                  (addWarn NoReason (nonStdGuardErr guards'))
 
-        ; return (GRHS noExtField guards' rhs', fvs) }
+        ; return (GRHS noAnn guards' rhs', fvs) }
   where
         -- Standard Haskell 1.4 guards are just a single boolean
         -- expression, rather than a list of qualifiers as in the

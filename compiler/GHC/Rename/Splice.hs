@@ -377,14 +377,15 @@ mkQuasiQuoteExpr :: UntypedSpliceFlavour -> Name -> SrcSpan -> FastString
                  -> LHsExpr GhcRn
 -- Return the expression (quoter "...quote...")
 -- which is what we must run in a quasi-quote
-mkQuasiQuoteExpr flavour quoter q_span quote
+mkQuasiQuoteExpr flavour quoter q_span' quote
   = L q_span $ HsApp noComments (L q_span
              $ HsApp noComments (L q_span
-                    (HsVar noExtField (L (noAnnSrcSpan q_span) quote_selector)))
+                    (HsVar noExtField (L q_span quote_selector)))
                                 quoterExpr)
                     quoteExpr
   where
-    quoterExpr = L q_span $! HsVar noExtField $! (L (noAnnSrcSpan q_span) quoter)
+    q_span = noAnnSrcSpan q_span'
+    quoterExpr = L q_span $! HsVar noExtField $! (L q_span quoter)
     quoteExpr  = L q_span $! HsLit noComments $! HsString NoSourceText quote
     quote_selector = case flavour of
                        UntypedExpSplice  -> quoteExpName
@@ -757,7 +758,7 @@ traceSplice (SpliceInfo { spliceDescription = sd, spliceSource = mb_src
                         , spliceGenerated = gen, spliceIsDecl = is_decl })
   = do { loc <- case mb_src of
                    Nothing        -> getSrcSpanM
-                   Just (L loc _) -> return loc
+                   Just (L loc _) -> return (locA loc)
        ; traceOptTcRn Opt_D_dump_splices (spliceDebugDoc loc)
 
        ; when is_decl $  -- Raw material for -dth-dec-file

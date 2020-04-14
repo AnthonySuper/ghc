@@ -200,7 +200,7 @@ tcTypedBracket rn_expr brack@(TExpBr _ expr) res_ty
                        rn_expr
                        (unLoc (mkHsApp (mkLHsWrap (applyQuoteWrapper wrapper)
                                                   (nlHsTyApp texpco [rep, expr_ty]))
-                                      (noLoc (HsTcBracketOut noExtField (Just wrapper) brack ps'))))
+                                      (noLocA (HsTcBracketOut noExtField (Just wrapper) brack ps'))))
                        meta_ty res_ty }
 tcTypedBracket _ other_brack _
   = pprPanic "tcTypedBracket" (ppr other_brack)
@@ -583,7 +583,7 @@ generated code as FromSource to enable warnings. That effort is tracked in
 
 tcSpliceExpr splice@(HsTypedSplice _ _ name expr) res_ty
   = addErrCtxt (spliceCtxtDoc splice) $
-    setSrcSpan (getLoc expr)    $ do
+    setSrcSpan (getLocA expr)    $ do
     { stage <- getStage
     ; case stage of
           Splice {}            -> tcTopSplice expr res_ty
@@ -755,10 +755,11 @@ runAnnotation target expr = do
                 -- LIE consulted by tcTopSpliceExpr
                 -- and hence ensures the appropriate dictionary is bound by const_binds
               ; wrapper <- instCall AnnOrigin [expr_ty] [mkClassPred data_class [expr_ty]]
+              ; let loc' = noAnnSrcSpan loc
               ; let specialised_to_annotation_wrapper_expr
-                      = L loc (mkHsWrap wrapper
+                      = L loc' (mkHsWrap wrapper
                                  (HsVar noExtField (L (noAnnSrcSpan loc) to_annotation_wrapper_id)))
-              ; return (L loc (HsApp noComments
+              ; return (L loc' (HsApp noComments
                                 specialised_to_annotation_wrapper_expr expr'))
                                 })
 
@@ -938,7 +939,7 @@ runMeta' show_code ppr_hs run_and_convert expr
                 -- encounter them inside the try
                 --
                 -- See Note [Exceptions in TH]
-          let expr_span = getLoc expr
+          let expr_span = getLocA expr
         ; either_tval <- tryAllM $
                          setSrcSpan expr_span $ -- Set the span so that qLocation can
                                                 -- see where this splice is

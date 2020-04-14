@@ -1743,7 +1743,7 @@ getGhciStepIO = do
       ioM = nlHsTyVar (getRdrName ioTyConName) `nlHsAppTy` stringTy
       body = nlHsVar (getRdrName ghciStepIoMName)
       tySig = mkLHsSigWcType (ghciM `nlHsFunTy` ioM)
-  return $ noLoc $ ExprWithTySig noAnn body tySig
+  return $ noLocA $ ExprWithTySig noAnn body tySig
 
 -----------------------------------------------------------------------------
 -- :check

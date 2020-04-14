@@ -2069,7 +2069,7 @@ wrongTyFamName fam_tc_name eqn_tc_name
 
 -----------------
 rnConDecls :: [LConDecl GhcPs] -> RnM ([LConDecl GhcRn], FreeVars)
-rnConDecls = mapFvRn (wrapLocFstM rnConDecl)
+rnConDecls = mapFvRn (wrapLocFstMA rnConDecl)
 
 rnConDecl :: ConDecl GhcPs -> RnM (ConDecl GhcRn, FreeVars)
 rnConDecl decl@(ConDeclH98 { con_name = name, con_ex_tvs = ex_tvs
@@ -2098,7 +2098,7 @@ rnConDecl decl@(ConDeclH98 { con_name = name, con_ex_tvs = ex_tvs
              [ text "ex_tvs:" <+> ppr ex_tvs
              , text "new_ex_dqtvs':" <+> ppr new_ex_tvs ])
 
-        ; return (decl { con_ext = noExtField
+        ; return (decl { con_ext = noAnn
                        , con_name = new_name, con_ex_tvs = new_ex_tvs
                        , con_mb_cxt = new_context, con_args = new_args
                        , con_doc = mb_doc' },
@@ -2151,7 +2151,7 @@ rnConDecl decl@(ConDeclGADT { con_names   = names
                                  , hsq_explicit  = explicit_tkvs }
 
         ; traceRn "rnConDecl2" (ppr names $$ ppr implicit_tkvs $$ ppr explicit_tkvs)
-        ; return (decl { con_g_ext = noExtField, con_names = new_names
+        ; return (decl { con_g_ext = noAnn, con_names = new_names
                        , con_qvars = new_qtvs, con_mb_cxt = new_cxt
                        , con_args = args', con_res_ty = res_ty'
                        , con_doc = mb_doc' },

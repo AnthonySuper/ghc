@@ -596,14 +596,17 @@ dsCmd ids local_vars stack_ty res_ty
     let
         left_id  = HsConLikeOut noExtField (RealDataCon left_con)
         right_id = HsConLikeOut noExtField (RealDataCon right_con)
-        left_expr  ty1 ty2 e = noLoc $ HsApp noComments
-                           (noLoc $ mkHsWrap (mkWpTyApps [ty1, ty2]) left_id ) e
-        right_expr ty1 ty2 e = noLoc $ HsApp noComments
-                           (noLoc $ mkHsWrap (mkWpTyApps [ty1, ty2]) right_id) e
+        left_expr  ty1 ty2 e = noLocA $ HsApp noComments
+                           (noLocA $ mkHsWrap (mkWpTyApps [ty1, ty2]) left_id ) e
+        right_expr ty1 ty2 e = noLocA $ HsApp noComments
+                           (noLocA $ mkHsWrap (mkWpTyApps [ty1, ty2]) right_id) e
 
         -- Prefix each tuple with a distinct series of Left's and Right's,
         -- in a balanced way, keeping track of the types.
 
+        merge_branches :: ([LHsExpr GhcTc], Type, CoreExpr)
+                      -> ([LHsExpr GhcTc], Type, CoreExpr)
+                      -> ([LHsExpr GhcTc], Type, CoreExpr) -- AZ
         merge_branches (builds1, in_ty1, core_exp1)
                        (builds2, in_ty2, core_exp2)
           = (map (left_expr in_ty1 in_ty2) builds1 ++
@@ -738,7 +741,7 @@ dsfixCmd
                 DIdSet,         -- subset of local vars that occur free
                 [Id])           -- the same local vars as a list, fed back
 dsfixCmd ids local_vars stk_ty cmd_ty cmd
-  = do { putSrcSpanDs (getLoc cmd) $ dsNoLevPoly cmd_ty
+  = do { putSrcSpanDs (getLocA cmd) $ dsNoLevPoly cmd_ty
            (text "When desugaring the command:" <+> ppr cmd)
        ; trimInput (dsLCmd ids local_vars stk_ty cmd_ty cmd) }
 
@@ -1140,8 +1143,8 @@ matchSimplys _ _ _ _ _ = panic "matchSimplys"
 
 -- List of leaf expressions, with set of variables bound in each
 
-leavesMatch :: LMatch GhcTc (Located (body GhcTc))
-            -> [(Located (body GhcTc), IdSet)]
+leavesMatch :: LMatch GhcTc (LocatedA (body GhcTc))
+            -> [(LocatedA (body GhcTc), IdSet)]
 leavesMatch (L _ (Match { m_pats = pats
                         , m_grhss = GRHSs _ grhss (L _ binds) }))
   = let
@@ -1159,24 +1162,24 @@ leavesMatch _ = panic "leavesMatch"
 
 replaceLeavesMatch
         :: Type                                 -- new result type
-        -> [Located (body' GhcTc)] -- replacement leaf expressions of that type
-        -> LMatch GhcTc (Located (body GhcTc))  -- the matches of a case command
-        -> ([Located (body' GhcTc)],            -- remaining leaf expressions
-            LMatch GhcTc (Located (body' GhcTc))) -- updated match
+        -> [LocatedA (body' GhcTc)] -- replacement leaf expressions of that type
+        -> LMatch GhcTc (LocatedA (body GhcTc))  -- the matches of a case command
+        -> ([LocatedA (body' GhcTc)],            -- remaining leaf expressions
+            LMatch GhcTc (LocatedA (body' GhcTc))) -- updated match
 replaceLeavesMatch _res_ty leaves
                         (L loc
                           match@(Match { m_grhss = GRHSs x grhss binds }))
   = let
         (leaves', grhss') = mapAccumL replaceLeavesGRHS leaves grhss
     in
-    (leaves', L loc (match { m_ext = noExtField, m_grhss = GRHSs x grhss' binds }))
+    (leaves', L loc (match { m_ext = noAnn, m_grhss = GRHSs x grhss' binds }))
 replaceLeavesMatch _ _ _ = panic "replaceLeavesMatch"
 
 replaceLeavesGRHS
-        :: [Located (body' GhcTc)]  -- replacement leaf expressions of that type
-        -> LGRHS GhcTc (Located (body GhcTc))     -- rhss of a case command
-        -> ([Located (body' GhcTc)],              -- remaining leaf expressions
-            LGRHS GhcTc (Located (body' GhcTc)))  -- updated GRHS
+        :: [LocatedA (body' GhcTc)]  -- replacement leaf expressions of that type
+        -> LGRHS GhcTc (LocatedA (body GhcTc))     -- rhss of a case command
+        -> ([LocatedA (body' GhcTc)],              -- remaining leaf expressions
+            LGRHS GhcTc (LocatedA (body' GhcTc)))  -- updated GRHS
 replaceLeavesGRHS (leaf:leaves) (L loc (GRHS x stmts _))
   = (leaves, L loc (GRHS x stmts leaf))
 replaceLeavesGRHS [] _ = panic "replaceLeavesGRHS []"
@@ -1247,7 +1250,7 @@ collectl (L _ pat) bndrs
     go (NPlusKPat _ (L _ n) _ _ _ _) = n : bndrs
 
     go (SigPat _ pat _)           = collectl pat bndrs
-    go (CoPat _ _ pat _)          = collectl (noLoc pat) bndrs
+    go (CoPat _ _ pat _)          = collectl (noLocA pat) bndrs
     go (ViewPat _ _ pat)          = collectl pat bndrs
     go p@(SplicePat {})           = pprPanic "collectl/go" (ppr p)
     go (XPat nec)                 = noExtCon nec

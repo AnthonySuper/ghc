@@ -451,7 +451,7 @@ gen_Ord_binds loc tycon = do
       where
         tag     = get_tag data_con
         tag_lit
-             = noLoc (HsLit noComments (HsIntPrim NoSourceText (toInteger tag)))
+             = noLocA (HsLit noComments (HsIntPrim NoSourceText (toInteger tag)))
 
     mkInnerEqAlt :: OrdOp -> DataCon -> LMatch GhcPs (LHsExpr GhcPs)
     -- First argument 'a' known to be built with K
@@ -534,7 +534,7 @@ unliftedCompare lt_op eq_op a_expr b_expr lt eq gt
 
 nlConWildPat :: DataCon -> LPat GhcPs
 -- The pattern (K {})
-nlConWildPat con = noLoc (ConPatIn noAnn (noLocA (getRdrName con))
+nlConWildPat con = noLocA (ConPatIn noAnn (noLocA (getRdrName con))
                                    (RecCon (HsRecFields { rec_flds = []
                                                         , rec_dotdot = Nothing })))
 
@@ -779,7 +779,7 @@ gen_Ix_binds loc tycon = do
 
     enum_index dflags
       = mkSimpleGeneratedFunBind loc unsafeIndex_RDR
-                [noLoc (AsPat noAnn (noLocA c_RDR)
+                [noLocA (AsPat noAnn (noLocA c_RDR)
                            (nlTuplePat [a_Pat, nlWildPat] Boxed)),
                                 d_Pat] (
            untag_Expr dflags tycon [(a_RDR, ah_RDR)] (
@@ -830,7 +830,7 @@ gen_Ix_binds loc tycon = do
     single_con_range
       = mkSimpleGeneratedFunBind loc range_RDR
           [nlTuplePat [con_pat as_needed, con_pat bs_needed] Boxed] $
-        noLoc (mkHsComp ListComp stmts con_expr)
+        noLocA (mkHsComp ListComp stmts con_expr)
       where
         stmts = zipWith3Equal "single_con_range" mk_qual as_needed bs_needed cs_needed
 
@@ -1588,7 +1588,7 @@ gen_Lift_binds loc tycon = (listToBag [lift_bind, liftTyped_bind], emptyBag)
             data_con_RDR = getRdrName data_con
             con_arity    = dataConSourceArity data_con
             as_needed    = take con_arity as_RDRs
-            lift_Expr    = noLoc (HsBracket noAnn (mk_bracket br_body))
+            lift_Expr    = noLocA (HsBracket noAnn (mk_bracket br_body))
             br_body      = nlHsApps (Exact (dataConName data_con))
                                     (map nlHsVar as_needed)
 
@@ -1897,13 +1897,13 @@ gen_Newtype_binds loc cls inst_tvs inst_tys rhs_ty
     underlying_inst_tys = changeLast inst_tys rhs_ty
 
 nlHsAppType :: LHsExpr GhcPs -> Type -> LHsExpr GhcPs
-nlHsAppType e s = noLoc (HsAppType noComments e hs_ty)
+nlHsAppType e s = noLocA (HsAppType noComments e hs_ty)
   where
     hs_ty = mkHsWildCardBndrs $ parenthesizeHsType appPrec (typeToLHsType s)
 
 nlExprWithTySig :: LHsExpr GhcPs -> Type -> LHsExpr GhcPs
 nlExprWithTySig e s
-  = noLoc $ ExprWithTySig noAnn (parenthesizeHsExpr sigPrec e) hs_ty
+  = noLocA $ ExprWithTySig noAnn (parenthesizeHsExpr sigPrec e) hs_ty
   where
     hs_ty = mkLHsSigWcType (typeToLHsType s)
 

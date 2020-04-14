@@ -73,7 +73,7 @@ import qualified Language.Haskell.TH as TH (Q)
 -- * Expressions proper
 
 -- | Located Haskell Expression
-type LHsExpr p = Located (HsExpr p)
+type LHsExpr p = LocatedA (HsExpr p)
   -- ^ May have 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnComma' when
   --   in a list
 
@@ -616,7 +616,7 @@ type instance XLam           GhcPs = ApiAnn
 type instance XLam           GhcRn = ApiAnn -- to simplify mkHsLam
 type instance XLam           GhcTc = NoExtField
 
-type instance XLamCase       (GhcPass _) = ApiAnnCO
+type instance XLamCase       (GhcPass _) = ApiAnn
 type instance XApp           (GhcPass _) = ApiAnnCO
 
 type instance XAppTypeE      (GhcPass _) = ApiAnnCO
@@ -661,7 +661,7 @@ type instance XDo            GhcPs = ApiAnn
 type instance XDo            GhcRn = NoExtField
 type instance XDo            GhcTc = Type
 
-type instance XExplicitList  GhcPs = ApiAnnCO
+type instance XExplicitList  GhcPs = ApiAnn
 type instance XExplicitList  GhcRn = NoExtField
 type instance XExplicitList  GhcTc = Type
 
@@ -687,7 +687,7 @@ type instance XRnBracketOut  (GhcPass _) = NoExtField
 type instance XTcBracketOut  (GhcPass _) = NoExtField
 
 type instance XSpliceE       (GhcPass _) = ApiAnnCO
-type instance XProc          (GhcPass _) = NoExtField
+type instance XProc          (GhcPass _) = ApiAnn
 
 type instance XStatic        GhcPs = NoExtField
 type instance XStatic        GhcRn = NameSet
@@ -1297,7 +1297,7 @@ We re-use HsExpr to represent these.
 -}
 
 -- | Located Haskell Command (for arrow syntax)
-type LHsCmd id = Located (HsCmd id)
+type LHsCmd id = LocatedA (HsCmd id)
 
 -- | Haskell Command (e.g. a "statement" in an Arrow proc block)
 data HsCmd id
@@ -1389,7 +1389,7 @@ data HsCmd id
 
   | XCmd        (XXCmd id)     -- Note [Trees that Grow] extension point
 
-type instance XCmdArrApp  GhcPs = NoExtField
+type instance XCmdArrApp  GhcPs = ApiAnn
 type instance XCmdArrApp  GhcRn = NoExtField
 type instance XCmdArrApp  GhcTc = Type
 
@@ -1628,7 +1628,7 @@ data Match p body
   }
   | XMatch (XXMatch p body)
 
-type instance XCMatch (GhcPass _) b = NoExtField
+type instance XCMatch (GhcPass _) b = ApiAnn
 type instance XXMatch (GhcPass _) b = NoExtCon
 
 instance (OutputableBndrId pr, Outputable body)
@@ -1732,7 +1732,7 @@ data GRHS p body = GRHS (XCGRHS p body)
                         body           -- Right hand side
                   | XGRHS (XXGRHS p body)
 
-type instance XCGRHS (GhcPass _) b = NoExtField
+type instance XCGRHS (GhcPass _) b = ApiAnn
 type instance XXGRHS (GhcPass _) b = NoExtCon
 
 -- We know the list must have at least one @Match@ in it.
@@ -2345,7 +2345,7 @@ pprArg (ApplicativeArgMany _ stmts return pat) =
      text "<-" <+>
      ppr (HsDo (panic "pprStmt") DoExpr (noLoc
                (stmts ++
-                   [noLoc (LastStmt noExtField (noLoc return) Nothing noSyntaxExpr)])))
+                   [noLoc (LastStmt noExtField (noLocA return) Nothing noSyntaxExpr)])))
 
 pprArg (XApplicativeArg x) = ppr x
 
@@ -2445,8 +2445,8 @@ data HsSplice id
 
 newtype HsSplicedT = HsSplicedT DelayedSplice deriving (Data)
 
-type instance XTypedSplice   (GhcPass _) = NoExtField
-type instance XUntypedSplice (GhcPass _) = NoExtField
+type instance XTypedSplice   (GhcPass _) = ApiAnn
+type instance XUntypedSplice (GhcPass _) = ApiAnn
 type instance XQuasiQuote    (GhcPass _) = NoExtField
 type instance XSpliced       (GhcPass _) = NoExtField
 type instance XXSplice       GhcPs       = NoExtCon

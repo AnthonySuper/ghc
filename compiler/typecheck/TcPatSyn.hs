@@ -723,7 +723,7 @@ tcPatSynMatcher (L loc name) lpat
              fail' = nlHsApps fail [nlHsVar voidPrimId]
 
              args = map nlVarPat [scrutinee, cont, fail]
-             lwpat = noLoc $ WildPat pat_ty
+             lwpat = noLocA $ WildPat pat_ty
              cases = if isIrrefutableHsPat lpat
                      then [mkHsCaseAlt lpat  cont']
                      else [mkHsCaseAlt lpat  cont',
@@ -731,11 +731,11 @@ tcPatSynMatcher (L loc name) lpat
              body = mkLHsWrap (mkWpLet req_ev_binds) $
                     L (getLoc lpat) $
                     HsCase noExtField (nlHsVar scrutinee) $
-                    MG{ mg_alts = L (getLoc lpat) cases
+                    MG{ mg_alts = L (getLocA lpat) cases
                       , mg_ext = MatchGroupTc [pat_ty] res_ty
                       , mg_origin = Generated
                       }
-             body' = noLoc $
+             body' = noLocA $
                      HsLam noExtField $
                      MG{ mg_alts = noLoc [mkSimpleMatch LambdaExpr
                                                         args body]
@@ -822,7 +822,7 @@ tcPatSynBuilderBind (PSB { psb_id = L loc name
   = return emptyBag
 
   | Left why <- mb_match_group       -- Can't invert the pattern
-  = setSrcSpan (getLoc lpat) $ failWithTc $
+  = setSrcSpan (getLocA lpat) $ failWithTc $
     vcat [ hang (text "Invalid right-hand side of bidirectional pattern synonym"
                  <+> quotes (ppr name) <> colon)
               2 why
@@ -867,7 +867,7 @@ tcPatSynBuilderBind (PSB { psb_id = L loc name
     mk_mg :: LHsExpr GhcRn -> MatchGroup GhcRn (LHsExpr GhcRn)
     mk_mg body = mkMatchGroup Generated [builder_match]
           where
-            builder_args  = [L (locA loc) (VarPat noExtField (L loc n))
+            builder_args  = [L loc (VarPat noExtField (L loc n))
                             | L loc n <- args]
             builder_match = mkMatch (mkPrefixFunRhs (L loc name))
                                     builder_args body
@@ -930,7 +930,7 @@ tcPatToExpr name args pat = go pat
                     -> Either MsgDoc (HsExpr GhcRn)
     mkPrefixConExpr lcon@(L loc _) pats
       = do { exprs <- mapM go pats
-           ; return (foldl' (\x y -> HsApp noComments (L (locA loc) x) y)
+           ; return (foldl' (\x y -> HsApp noComments (L loc x) y)
                             (HsVar noExtField lcon) exprs) }
 
     mkRecordConExpr :: LocatedA Name -> HsRecFields GhcRn (LPat GhcRn)
@@ -968,13 +968,13 @@ tcPatToExpr name args pat = go pat
                                                                            box }
     go1 (SumPat _ pat alt arity)    = do { expr <- go1 (unLoc pat)
                                          ; return $ ExplicitSum noExtField alt arity
-                                                                   (noLoc expr)
+                                                                   (noLocA expr)
                                          }
     go1 (LitPat _ lit)              = return $ HsLit noComments lit
     go1 (NPat _ (L _ n) mb_neg _)
         | Just (SyntaxExprRn neg) <- mb_neg
-                                    = return $ unLoc $ foldl' nlHsApp (noLoc neg)
-                                                       [noLoc (HsOverLit noComments n)]
+                                    = return $ unLoc $ foldl' nlHsApp (noLocA neg)
+                                                       [noLocA (HsOverLit noComments n)]
         | otherwise                 = return $ HsOverLit noComments n
     go1 (ConPatOut{})               = panic "ConPatOut in output of renamer"
     go1 (CoPat{})                   = panic "CoPat in output of renamer"

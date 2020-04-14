@@ -90,7 +90,7 @@ rnExprs ls = rnExprs' ls emptyUniqSet
 -- Variables. We look up the variable and return the resulting name.
 
 rnLExpr :: LHsExpr GhcPs -> RnM (LHsExpr GhcRn, FreeVars)
-rnLExpr = wrapLocFstM rnExpr
+rnLExpr = wrapLocFstMA rnExpr
 
 rnExpr :: HsExpr GhcPs -> RnM (HsExpr GhcRn, FreeVars)
 
@@ -126,7 +126,7 @@ rnExpr (HsVar _ (L l v))
                                        -- OverloadedLists works correctly
                                        -- Note [Empty lists] in GHC.Hs.Expr
               , xopt LangExt.OverloadedLists dflags
-              -> rnExpr (ExplicitList noComments Nothing [])
+              -> rnExpr (ExplicitList noAnn Nothing [])
 
               | otherwise
               -> finishHsVar (L l name) ;
@@ -167,7 +167,7 @@ rnExpr (HsOverLit x lit)
        ; case mb_neg of
               Nothing -> return (HsOverLit x lit', fvs)
               Just neg ->
-                 return (HsApp noComments (noLoc neg) (noLoc (HsOverLit x lit'))
+                 return (HsApp noComments (noLocA neg) (noLocA (HsOverLit x lit'))
                         , fvs ) }
 
 rnExpr (HsApp x fun arg)
@@ -306,7 +306,11 @@ rnExpr (RecordCon { rcon_con_name = con_id
                            , rcon_con_name = con_lname, rcon_flds = rec_binds' }
                 , fvs `plusFV` plusFVs fvss `addOneFV` con_name) }
   where
+    mk_hs_var :: SrcSpan -> IdP GhcPs -> HsExpr GhcPs -- AZ
     mk_hs_var l n = HsVar noExtField (L (noAnnSrcSpan l) n)
+    rn_field :: GenLocated l (HsRecField' id (LHsExpr GhcPs))
+                      -> RnM
+                           (GenLocated l (HsRecField' id (LHsExpr GhcRn)), FreeVars) -- AZ
     rn_field (L l fld) = do { (arg', fvs) <- rnLExpr (hsRecFieldArg fld)
                             ; return (L l (fld { hsRecFieldArg = arg' }), fvs) }
 
@@ -446,14 +450,14 @@ rnCmdTop = wrapLocFstM rnCmdTop'
   rnCmdTop' (XCmdTop nec) = noExtCon nec
 
 rnLCmd :: LHsCmd GhcPs -> RnM (LHsCmd GhcRn, FreeVars)
-rnLCmd = wrapLocFstM rnCmd
+rnLCmd = wrapLocFstMA rnCmd
 
 rnCmd :: HsCmd GhcPs -> RnM (HsCmd GhcRn, FreeVars)
 
-rnCmd (HsCmdArrApp x arrow arg ho rtl)
+rnCmd (HsCmdArrApp _ arrow arg ho rtl)
   = do { (arrow',fvArrow) <- select_arrow_scope (rnLExpr arrow)
        ; (arg',fvArg) <- rnLExpr arg
-       ; return (HsCmdArrApp x arrow' arg' ho rtl,
+       ; return (HsCmdArrApp noExtField arrow' arg' ho rtl,
                  fvArrow `plusFV` fvArg) }
   where
     select_arrow_scope tc = case ho of
@@ -661,32 +665,32 @@ See Note [Deterministic UniqFM] to learn more about nondeterminism.
 -- | Rename some Stmts
 rnStmts :: Outputable (body GhcPs)
         => HsStmtContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
            -- ^ How to rename the body of each statement (e.g. rnLExpr)
-        -> [LStmt GhcPs (Located (body GhcPs))]
+        -> [LStmt GhcPs (LocatedA (body GhcPs))]
            -- ^ Statements
         -> ([Name] -> RnM (thing, FreeVars))
            -- ^ if these statements scope over something, this renames it
            -- and returns the result.
-        -> RnM (([LStmt GhcRn (Located (body GhcRn))], thing), FreeVars)
+        -> RnM (([LStmt GhcRn (LocatedA (body GhcRn))], thing), FreeVars)
 rnStmts ctxt rnBody = rnStmtsWithPostProcessing ctxt rnBody noPostProcessStmts
 
 -- | like 'rnStmts' but applies a post-processing step to the renamed Stmts
 rnStmtsWithPostProcessing
         :: Outputable (body GhcPs)
         => HsStmtContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
            -- ^ How to rename the body of each statement (e.g. rnLExpr)
         -> (HsStmtContext Name
-              -> [(LStmt GhcRn (Located (body GhcRn)), FreeVars)]
-              -> RnM ([LStmt GhcRn (Located (body GhcRn))], FreeVars))
+              -> [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)]
+              -> RnM ([LStmt GhcRn (LocatedA (body GhcRn))], FreeVars))
            -- ^ postprocess the statements
-        -> [LStmt GhcPs (Located (body GhcPs))]
+        -> [LStmt GhcPs (LocatedA (body GhcPs))]
            -- ^ Statements
         -> ([Name] -> RnM (thing, FreeVars))
            -- ^ if these statements scope over something, this renames it
            -- and returns the result.
-        -> RnM (([LStmt GhcRn (Located (body GhcRn))], thing), FreeVars)
+        -> RnM (([LStmt GhcRn (LocatedA (body GhcRn))], thing), FreeVars)
 rnStmtsWithPostProcessing ctxt rnBody ppStmts stmts thing_inside
  = do { ((stmts', thing), fvs) <-
           rnStmtsWithFreeVars ctxt rnBody stmts thing_inside
@@ -718,17 +722,17 @@ postProcessStmtsForApplicativeDo ctxt stmts
 -- | strip the FreeVars annotations from statements
 noPostProcessStmts
   :: HsStmtContext Name
-  -> [(LStmt GhcRn (Located (body GhcRn)), FreeVars)]
-  -> RnM ([LStmt GhcRn (Located (body GhcRn))], FreeVars)
+  -> [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)]
+  -> RnM ([LStmt GhcRn (LocatedA (body GhcRn))], FreeVars)
 noPostProcessStmts _ stmts = return (map fst stmts, emptyNameSet)
 
 
 rnStmtsWithFreeVars :: Outputable (body GhcPs)
         => HsStmtContext Name
-        -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
-        -> [LStmt GhcPs (Located (body GhcPs))]
+        -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
+        -> [LStmt GhcPs (LocatedA (body GhcPs))]
         -> ([Name] -> RnM (thing, FreeVars))
-        -> RnM ( ([(LStmt GhcRn (Located (body GhcRn)), FreeVars)], thing)
+        -> RnM ( ([(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)], thing)
                , FreeVars)
 -- Each Stmt body is annotated with its FreeVars, so that
 -- we can rearrange statements for ApplicativeDo.
@@ -788,13 +792,13 @@ At one point we failed to make this distinction, leading to #11216.
 
 rnStmt :: Outputable (body GhcPs)
        => HsStmtContext Name
-       -> (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
+       -> (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
           -- ^ How to rename the body of the statement
-       -> LStmt GhcPs (Located (body GhcPs))
+       -> LStmt GhcPs (LocatedA (body GhcPs))
           -- ^ The statement
        -> ([Name] -> RnM (thing, FreeVars))
           -- ^ Rename the stuff that this statement scopes over
-       -> RnM ( ([(LStmt GhcRn (Located (body GhcRn)), FreeVars)], thing)
+       -> RnM ( ([(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)], thing)
               , FreeVars)
 -- Variables bound by the Stmt, and mentioned in thing_inside,
 -- do not appear in the result FreeVars
@@ -1041,12 +1045,12 @@ type Segment stmts = (Defs,
 
 -- wrapper that does both the left- and right-hand sides
 rnRecStmtsAndThen :: Outputable (body GhcPs) =>
-                     (Located (body GhcPs)
-                  -> RnM (Located (body GhcRn), FreeVars))
-                  -> [LStmt GhcPs (Located (body GhcPs))]
+                     (LocatedA (body GhcPs)
+                  -> RnM (LocatedA (body GhcRn), FreeVars))
+                  -> [LStmt GhcPs (LocatedA (body GhcPs))]
                          -- assumes that the FreeVars returned includes
                          -- the FreeVars of the Segments
-                  -> ([Segment (LStmt GhcRn (Located (body GhcRn)))]
+                  -> ([Segment (LStmt GhcRn (LocatedA (body GhcRn)))]
                       -> RnM (a, FreeVars))
                   -> RnM (a, FreeVars)
 rnRecStmtsAndThen rnBody s cont
@@ -1149,10 +1153,10 @@ rn_rec_stmts_lhs fix_env stmts
 -- right-hand-sides
 
 rn_rec_stmt :: (Outputable (body GhcPs)) =>
-               (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
+               (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
             -> [Name]
-            -> (LStmtLR GhcRn GhcPs (Located (body GhcPs)), FreeVars)
-            -> RnM [Segment (LStmt GhcRn (Located (body GhcRn)))]
+            -> (LStmtLR GhcRn GhcPs (LocatedA (body GhcPs)), FreeVars)
+            -> RnM [Segment (LStmt GhcRn (LocatedA (body GhcRn)))]
         -- Rename a Stmt that is inside a RecStmt (or mdo)
         -- Assumes all binders are already in scope
         -- Turns each stmt into a singleton Stmt
@@ -1212,10 +1216,10 @@ rn_rec_stmt _ _ (L _ (XStmtLR nec), _)
   = noExtCon nec
 
 rn_rec_stmts :: Outputable (body GhcPs) =>
-                (Located (body GhcPs) -> RnM (Located (body GhcRn), FreeVars))
+                (LocatedA (body GhcPs) -> RnM (LocatedA (body GhcRn), FreeVars))
              -> [Name]
-             -> [(LStmtLR GhcRn GhcPs (Located (body GhcPs)), FreeVars)]
-             -> RnM [Segment (LStmt GhcRn (Located (body GhcRn)))]
+             -> [(LStmtLR GhcRn GhcPs (LocatedA (body GhcPs)), FreeVars)]
+             -> RnM [Segment (LStmt GhcRn (LocatedA (body GhcRn)))]
 rn_rec_stmts rnBody bndrs stmts
   = do { segs_s <- mapM (rn_rec_stmt rnBody bndrs) stmts
        ; return (concat segs_s) }
@@ -1748,7 +1752,7 @@ stmtTreeToStmts monad_names ctxt (StmtTreeApplicative trees) tail tail_fvs = do
              return (unLoc tup, emptyNameSet)
            | otherwise -> do
              (ret, _) <- lookupSyntaxExpr returnMName
-             let expr = HsApp noComments (noLoc ret) tup
+             let expr = HsApp noComments (noLocA ret) tup
              return (expr, emptyFVs)
      return ( ApplicativeArgMany
               { xarg_app_arg_many = noExtField
@@ -1900,10 +1904,10 @@ splitSegment stmts
       _other -> (stmts,[])
 
 slurpIndependentStmts
-   :: [(LStmt GhcRn (Located (body GhcRn)), FreeVars)]
-   -> Maybe ( [(LStmt GhcRn (Located (body GhcRn)), FreeVars)] -- LetStmts
-            , [(LStmt GhcRn (Located (body GhcRn)), FreeVars)] -- BindStmts
-            , [(LStmt GhcRn (Located (body GhcRn)), FreeVars)] )
+   :: [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)]
+   -> Maybe ( [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)] -- LetStmts
+            , [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)] -- BindStmts
+            , [(LStmt GhcRn (LocatedA (body GhcRn)), FreeVars)] )
 slurpIndependentStmts stmts = go [] [] emptyNameSet stmts
  where
   -- If we encounter a BindStmt that doesn't depend on a previous BindStmt
@@ -2019,8 +2023,8 @@ emptyErr ctxt               = text "Empty" <+> pprStmtContext ctxt
 
 ----------------------
 checkLastStmt :: Outputable (body GhcPs) => HsStmtContext Name
-              -> LStmt GhcPs (Located (body GhcPs))
-              -> RnM (LStmt GhcPs (Located (body GhcPs)))
+              -> LStmt GhcPs (LocatedA (body GhcPs))
+              -> RnM (LStmt GhcPs (LocatedA (body GhcPs)))
 checkLastStmt ctxt lstmt@(L loc stmt)
   = case ctxt of
       ListComp  -> check_comp
@@ -2049,7 +2053,7 @@ checkLastStmt ctxt lstmt@(L loc stmt)
 
 -- Checking when a particular Stmt is ok
 checkStmt :: HsStmtContext Name
-          -> LStmt GhcPs (Located (body GhcPs))
+          -> LStmt GhcPs (LocatedA (body GhcPs))
           -> RnM ()
 checkStmt ctxt (L _ stmt)
   = do { dflags <- getDynFlags
@@ -2077,7 +2081,7 @@ emptyInvalid = NotValid Outputable.empty
 
 okStmt, okDoStmt, okCompStmt, okParStmt
    :: DynFlags -> HsStmtContext Name
-   -> Stmt GhcPs (Located (body GhcPs)) -> Validity
+   -> Stmt GhcPs (LocatedA (body GhcPs)) -> Validity
 -- Return Nothing if OK, (Just extra) if not ok
 -- The "extra" is an SDoc that is appended to a generic error message
 
@@ -2094,7 +2098,7 @@ okStmt dflags ctxt stmt
       TransStmtCtxt ctxt -> okStmt dflags ctxt stmt
 
 -------------
-okPatGuardStmt :: Stmt GhcPs (Located (body GhcPs)) -> Validity
+okPatGuardStmt :: Stmt GhcPs (LocatedA (body GhcPs)) -> Validity
 okPatGuardStmt stmt
   = case stmt of
       BodyStmt {} -> IsValid
@@ -2212,10 +2216,10 @@ getMonadFailOp
         arg_name <- newSysName arg_lit
         let arg_syn_expr = nlHsVar arg_name
             body :: LHsExpr GhcRn =
-              nlHsApp (noLoc failExpr)
-                      (nlHsApp (noLoc $ fromStringExpr) arg_syn_expr)
+              nlHsApp (noLocA failExpr)
+                      (nlHsApp (noLocA $ fromStringExpr) arg_syn_expr)
         let failAfterFromStringExpr :: HsExpr GhcRn =
-              unLoc $ mkHsLam [noLoc $ VarPat noExtField $ noLocA arg_name] body
+              unLoc $ mkHsLam [noLocA $ VarPat noExtField $ noLocA arg_name] body
         let failAfterFromStringSynExpr :: SyntaxExpr GhcRn =
               mkSyntaxExpr failAfterFromStringExpr
         return (failAfterFromStringSynExpr, failFvs `plusFV` fromStringFvs)

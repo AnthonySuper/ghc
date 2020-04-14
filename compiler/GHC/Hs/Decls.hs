@@ -98,7 +98,7 @@ module GHC.Hs.Decls (
 -- friends:
 import GhcPrelude
 
-import {-# SOURCE #-} GHC.Hs.Expr( HsExpr, HsSplice, pprExpr,
+import {-# SOURCE #-} GHC.Hs.Expr( LHsExpr, HsSplice, pprExpr,
                                    pprSpliceDecl )
         -- Because Expr imports Decls via HsBracket
 
@@ -1326,7 +1326,7 @@ data HsDerivingClause pass
     }
   | XHsDerivingClause (XXHsDerivingClause pass)
 
-type instance XCHsDerivingClause    (GhcPass _) = NoExtField
+type instance XCHsDerivingClause    (GhcPass _) = ApiAnn
 type instance XXHsDerivingClause    (GhcPass _) = NoExtCon
 
 instance OutputableBndrId p
@@ -1399,7 +1399,7 @@ newOrDataToFlavour DataType = DataTypeFlavour
 
 
 -- | Located data Constructor Declaration
-type LConDecl pass = Located (ConDecl pass)
+type LConDecl pass = LocatedA (ConDecl pass)
       -- ^ May have 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnSemi' when
       --   in a GADT constructor list
 
@@ -1471,8 +1471,8 @@ data ConDecl pass
       }
   | XConDecl (XXConDecl pass)
 
-type instance XConDeclGADT (GhcPass _) = NoExtField
-type instance XConDeclH98  (GhcPass _) = NoExtField
+type instance XConDeclGADT (GhcPass _) = ApiAnn
+type instance XConDeclH98  (GhcPass _) = ApiAnn
 type instance XXConDecl    (GhcPass _) = NoExtCon
 
 {- Note [GADT abstract syntax]
@@ -2328,8 +2328,8 @@ data RuleDecl pass
        , rd_tmvs :: [LRuleBndr pass]
            -- ^ Forall'd term vars, before typechecking; after typechecking
            --    this includes all forall'd vars
-       , rd_lhs  :: Located (HsExpr pass)
-       , rd_rhs  :: Located (HsExpr pass)
+       , rd_lhs  :: LHsExpr pass
+       , rd_rhs  :: LHsExpr pass
        }
     -- ^
     --  - 'ApiAnnotation.AnnKeywordId' :
@@ -2502,7 +2502,7 @@ type LAnnDecl pass = Located (AnnDecl pass)
 data AnnDecl pass = HsAnnotation
                       (XHsAnnotation pass)
                       SourceText -- Note [Pragma source text] in GHC.Types.Basic
-                      (AnnProvenance (IdP pass)) (Located (HsExpr pass))
+                      (AnnProvenance (IdP pass)) (LHsExpr pass)
       -- ^ - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnOpen',
       --           'ApiAnnotation.AnnType'
       --           'ApiAnnotation.AnnModule'

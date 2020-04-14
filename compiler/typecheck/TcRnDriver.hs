@@ -1781,6 +1781,7 @@ check_main dflags tcg_env explicit_mod_hdr export_ies
     use_as_main main_name = do
         { traceTc "checkMain found" (ppr main_mod <+> ppr main_fn)
         ; let loc       = srcLocSpan (getSrcLoc main_name)
+        ; let loc'      = noAnnSrcSpan loc
         ; ioTyCon <- tcLookupTyCon ioTyConName
         ; res_ty <- newFlexiTyVarTy liftedTypeKind
         ; let io_ty = mkTyConApp ioTyCon [res_ty]
@@ -1788,7 +1789,7 @@ check_main dflags tcg_env explicit_mod_hdr export_ies
         ; (ev_binds, main_expr)
                <- checkConstraints skol_info [] [] $
                   addErrCtxt mainCtxt    $
-                  tcMonoExpr (L loc (HsVar noExtField (L (noAnnSrcSpan loc) main_name)))
+                  tcMonoExpr (L loc' (HsVar noExtField (L (noAnnSrcSpan loc) main_name)))
                              (mkCheckExpType io_ty)
 
                 -- See Note [Root-main Id]
@@ -2197,7 +2198,7 @@ tcUserStmt (L loc (BodyStmt _ expr _ _))
 
               -- [it <- e]
               bind_stmt = L loc $ BindStmt noExtField
-                                       (L loc (VarPat noExtField (L (noAnnSrcSpan loc) fresh_it)))
+                                       (L (noAnnSrcSpan loc) (VarPat noExtField (L (noAnnSrcSpan loc) fresh_it)))
                                        (nlHsApp ghciStep rn_expr)
                                        (mkRnSyntaxExpr bindIOName)
                                        noSyntaxExpr
@@ -2423,7 +2424,7 @@ tcGhciStmts stmts
            -- Note [Implementing unsafeCoerce] in base:Unsafe.Coerce
 
       ; let ret_expr = nlHsApp (nlHsTyApp ret_id [ret_ty]) $
-                       noLoc $ ExplicitList unitTy Nothing $
+                       noLocA $ ExplicitList unitTy Nothing $
                        map mk_item ids
 
             mk_item id = unsafe_coerce_id `nlHsTyApp` [ getRuntimeRep (idType id)
@@ -2433,7 +2434,7 @@ tcGhciStmts stmts
             stmts = tc_stmts ++ [noLoc (mkLastStmt ret_expr)]
 
       ; return (ids, mkHsDictLet (EvBinds const_binds) $
-                     noLoc (HsDo io_ret_ty GhciStmtCtxt (noLoc stmts)))
+                     noLocA (HsDo io_ret_ty GhciStmtCtxt (noLoc stmts)))
     }
 
 -- | Generate a typed ghciStepIO expression (ghciStep :: Ty a -> IO a)
@@ -2453,7 +2454,7 @@ getGhciStepIO = do
         stepTy :: LHsSigWcType GhcRn
         stepTy = mkEmptyWildCardBndrs (mkEmptyImplicitBndrs step_ty)
 
-    return (noLoc $ ExprWithTySig noExtField (nlHsVar ghciStepIoMName) stepTy)
+    return (noLocA $ ExprWithTySig noExtField (nlHsVar ghciStepIoMName) stepTy)
 
 isGHCiMonad :: HscEnv -> String -> IO (Messages, Maybe Name)
 isGHCiMonad hsc_env ty
@@ -2492,7 +2493,7 @@ tcRnExpr hsc_env mode rdr_expr
         -- Now typecheck the expression, and generalise its type
         -- it might have a rank-2 type (e.g. :t runST)
     uniq <- newUnique ;
-    let { fresh_it  = itName uniq (getLoc rdr_expr)
+    let { fresh_it  = itName uniq (getLocA rdr_expr)
         ; orig = lexprCtOrigin rn_expr } ;
     ((tclvl, res_ty), lie)
           <- captureTopConstraints $

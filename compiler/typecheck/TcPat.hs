@@ -306,7 +306,7 @@ tc_lpat :: LPat GhcRn
         -> TcM a
         -> TcM (LPat GhcTcId, a)
 tc_lpat (L span pat) pat_ty penv thing_inside
-  = setSrcSpan span $
+  = setSrcSpanA span $
     do  { (pat', res) <- maybeWrapPatCtxt pat (tc_pat penv pat pat_ty)
                                           thing_inside
         ; return (L span pat', res) }
@@ -472,7 +472,7 @@ tc_pat penv (TuplePat _ pats boxity) pat_ty thing_inside
                                  -- pat_ty /= pat_ty iff coi /= IdCo
               possibly_mangled_result
                 | gopt Opt_IrrefutableTuples dflags &&
-                  isBoxed boxity   = LazyPat noExtField (noLoc unmangled_result)
+                  isBoxed boxity   = LazyPat noExtField (noLocA unmangled_result)
                 | otherwise        = unmangled_result
 
         ; pat_ty <- readExpType pat_ty

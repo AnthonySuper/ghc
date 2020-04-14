@@ -119,9 +119,9 @@ parser guarantees that each equation has exactly one argument.
 tcMatchesCase :: (Outputable (body GhcRn)) =>
                 TcMatchCtxt body                        -- Case context
              -> TcSigmaType                             -- Type of scrutinee
-             -> MatchGroup GhcRn (Located (body GhcRn)) -- The case alternatives
+             -> MatchGroup GhcRn (LocatedA (body GhcRn)) -- The case alternatives
              -> ExpRhoType                    -- Type of whole case expressions
-             -> TcM (MatchGroup GhcTcId (Located (body GhcTcId)))
+             -> TcM (MatchGroup GhcTcId (LocatedA (body GhcTcId)))
                 -- Translated alternatives
                 -- wrapper goes from MatchGroup's ty to expected ty
 
@@ -202,15 +202,15 @@ tauifyMultipleMatches group exp_tys
 tcMatches :: (Outputable (body GhcRn)) => TcMatchCtxt body
           -> [ExpSigmaType]      -- Expected pattern types
           -> ExpRhoType          -- Expected result-type of the Match.
-          -> MatchGroup GhcRn (Located (body GhcRn))
-          -> TcM (MatchGroup GhcTcId (Located (body GhcTcId)))
+          -> MatchGroup GhcRn (LocatedA (body GhcRn))
+          -> TcM (MatchGroup GhcTcId (LocatedA (body GhcTcId)))
 
 data TcMatchCtxt body   -- c.f. TcStmtCtxt, also in this module
   = MC { mc_what :: HsMatchContext Name,       -- What kind of thing this is
-         mc_body :: Located (body GhcRn)       -- Type checker for a body of
+         mc_body :: LocatedA (body GhcRn)       -- Type checker for a body of
                                                -- an alternative
                  -> ExpRhoType
-                 -> TcM (Located (body GhcTcId)) }
+                 -> TcM (LocatedA (body GhcTcId)) }
 
 tcMatches ctxt pat_tys rhs_ty (MG { mg_alts = L l matches
                                   , mg_origin = origin })
@@ -229,8 +229,8 @@ tcMatches _ _ _ (XMatchGroup nec) = noExtCon nec
 tcMatch :: (Outputable (body GhcRn)) => TcMatchCtxt body
         -> [ExpSigmaType]        -- Expected pattern types
         -> ExpRhoType            -- Expected result-type of the Match.
-        -> LMatch GhcRn (Located (body GhcRn))
-        -> TcM (LMatch GhcTcId (Located (body GhcTcId)))
+        -> LMatch GhcRn (LocatedA (body GhcRn))
+        -> TcM (LMatch GhcTcId (LocatedA (body GhcTcId)))
 
 tcMatch ctxt pat_tys rhs_ty match
   = wrapLocM (tc_match ctxt pat_tys rhs_ty) match
@@ -240,7 +240,7 @@ tcMatch ctxt pat_tys rhs_ty match
       = add_match_ctxt match $
         do { (pats', grhss') <- tcPats (mc_what ctxt) pats pat_tys $
                                 tcGRHSs ctxt grhss rhs_ty
-           ; return (Match { m_ext = noExtField
+           ; return (Match { m_ext = noAnn
                            , m_ctxt = mc_what ctxt, m_pats = pats'
                            , m_grhss = grhss' }) }
     tc_match  _ _ _ (XMatch nec) = noExtCon nec
@@ -253,8 +253,8 @@ tcMatch ctxt pat_tys rhs_ty match
             _          -> addErrCtxt (pprMatchInCtxt match) thing_inside
 
 -------------
-tcGRHSs :: TcMatchCtxt body -> GRHSs GhcRn (Located (body GhcRn)) -> ExpRhoType
-        -> TcM (GRHSs GhcTcId (Located (body GhcTcId)))
+tcGRHSs :: TcMatchCtxt body -> GRHSs GhcRn (LocatedA (body GhcRn)) -> ExpRhoType
+        -> TcM (GRHSs GhcTcId (LocatedA (body GhcTcId)))
 
 -- Notice that we pass in the full res_ty, so that we get
 -- good inference from simple things like
@@ -271,14 +271,14 @@ tcGRHSs ctxt (GRHSs _ grhss (L l binds)) res_ty
 tcGRHSs _ (XGRHSs nec) _ = noExtCon nec
 
 -------------
-tcGRHS :: TcMatchCtxt body -> ExpRhoType -> GRHS GhcRn (Located (body GhcRn))
-       -> TcM (GRHS GhcTcId (Located (body GhcTcId)))
+tcGRHS :: TcMatchCtxt body -> ExpRhoType -> GRHS GhcRn (LocatedA (body GhcRn))
+       -> TcM (GRHS GhcTcId (LocatedA (body GhcTcId)))
 
 tcGRHS ctxt res_ty (GRHS _ guards rhs)
   = do  { (guards', rhs')
             <- tcStmtsAndThen stmt_ctxt tcGuardStmt guards res_ty $
                mc_body ctxt rhs
-        ; return (GRHS noExtField guards' rhs') }
+        ; return (GRHS noAnn guards' rhs') }
   where
     stmt_ctxt  = PatGuard (mc_what ctxt)
 tcGRHS _ _ (XGRHS nec) = noExtCon nec
@@ -339,16 +339,16 @@ type TcCmdStmtChecker  = TcStmtChecker HsCmd  TcRhoType
 
 type TcStmtChecker body rho_type
   =  forall thing. HsStmtContext Name
-                -> Stmt GhcRn (Located (body GhcRn))
+                -> Stmt GhcRn (LocatedA (body GhcRn))
                 -> rho_type                 -- Result type for comprehension
                 -> (rho_type -> TcM thing)  -- Checker for what follows the stmt
-                -> TcM (Stmt GhcTcId (Located (body GhcTcId)), thing)
+                -> TcM (Stmt GhcTcId (LocatedA (body GhcTcId)), thing)
 
 tcStmts :: (Outputable (body GhcRn)) => HsStmtContext Name
         -> TcStmtChecker body rho_type   -- NB: higher-rank type
-        -> [LStmt GhcRn (Located (body GhcRn))]
+        -> [LStmt GhcRn (LocatedA (body GhcRn))]
         -> rho_type
-        -> TcM [LStmt GhcTcId (Located (body GhcTcId))]
+        -> TcM [LStmt GhcTcId (LocatedA (body GhcTcId))]
 tcStmts ctxt stmt_chk stmts res_ty
   = do { (stmts', _) <- tcStmtsAndThen ctxt stmt_chk stmts res_ty $
                         const (return ())
@@ -356,10 +356,10 @@ tcStmts ctxt stmt_chk stmts res_ty
 
 tcStmtsAndThen :: (Outputable (body GhcRn)) => HsStmtContext Name
                -> TcStmtChecker body rho_type    -- NB: higher-rank type
-               -> [LStmt GhcRn (Located (body GhcRn))]
+               -> [LStmt GhcRn (LocatedA (body GhcRn))]
                -> rho_type
                -> (rho_type -> TcM thing)
-               -> TcM ([LStmt GhcTcId (Located (body GhcTcId))], thing)
+               -> TcM ([LStmt GhcTcId (LocatedA (body GhcTcId))], thing)
 
 -- Note the higher-rank type.  stmt_chk is applied at different
 -- types in the equations for tcStmts
@@ -680,7 +680,7 @@ tcMcStmt ctxt (TransStmt { trS_stmts = stmts, trS_bndrs = bindersMap
        --------------- Typecheck the 'fmap' function -------------
        ; fmap_op' <- case form of
                        ThenForm -> return noExpr
-                       _ -> fmap unLoc . tcPolyExpr (noLoc fmap_op) $
+                       _ -> fmap unLoc . tcPolyExpr (noLocA fmap_op) $
                             mkInvForAllTy alphaTyVar $
                             mkInvForAllTy betaTyVar  $
                             (alphaTy `mkVisFunTy` betaTy)
@@ -752,7 +752,7 @@ tcMcStmt ctxt (ParStmt _ bndr_stmts_s mzip_op bind_op) res_ty thing_inside
                         (m_ty `mkAppTy` betaTy)
                         `mkVisFunTy`
                         (m_ty `mkAppTy` mkBoxedTupleTy [alphaTy, betaTy])
-       ; mzip_op' <- unLoc `fmap` tcPolyExpr (noLoc mzip_op) mzip_ty
+       ; mzip_op' <- unLoc `fmap` tcPolyExpr (noLocA mzip_op) mzip_ty
 
         -- type dummies since we don't know all binder types yet
        ; id_tys_s <- (mapM . mapM) (const (newFlexiTyVarTy liftedTypeKind))
@@ -1023,7 +1023,7 @@ tcApplicativeStmts ctxt pairs rhs_ty thing_inside
                     , fail_operator   = fail_op
                     , ..
                     }, pat_ty, exp_ty)
-      = setSrcSpan (combineSrcSpans (getLoc pat) (getLoc rhs)) $
+      = setSrcSpan (combineSrcSpans (getLocA pat) (getLocA rhs)) $
         addErrCtxt (pprStmtInCtxt ctxt (mkBindStmt pat rhs))   $
         do { rhs' <- tcMonoExprNC rhs (mkCheckExpType exp_ty)
            ; (pat', _) <- tcPat (StmtCtxt ctxt) pat (mkCheckExpType pat_ty) $
@@ -1041,7 +1041,7 @@ tcApplicativeStmts ctxt pairs rhs_ty thing_inside
       = do { (stmts', (ret',pat')) <-
                 tcStmtsAndThen ctxt tcDoStmt stmts (mkCheckExpType exp_ty) $
                 \res_ty  -> do
-                  { L _ ret' <- tcMonoExprNC (noLoc ret) res_ty
+                  { L _ ret' <- tcMonoExprNC (noLocA ret) res_ty
                   ; (pat', _) <- tcPat (StmtCtxt ctxt) pat (mkCheckExpType pat_ty) $
                                  return ()
                   ; return (ret', pat')

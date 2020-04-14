@@ -132,10 +132,10 @@ liftCpsFV rn_thing = CpsRn (\k -> do { (v,fvs1) <- rn_thing
                                      ; (r,fvs2) <- k v
                                      ; return (r, fvs1 `plusFV` fvs2) })
 
-wrapSrcSpanCps :: (a -> CpsRn b) -> Located a -> CpsRn (Located b)
+wrapSrcSpanCps :: (a -> CpsRn b) -> LocatedA a -> CpsRn (LocatedA b)
 -- Set the location, and also wrap it around the value returned
 wrapSrcSpanCps fn (L loc a)
-  = CpsRn (\k -> setSrcSpan loc $
+  = CpsRn (\k -> setSrcSpanA loc $
                  unCpsRn (fn a) $ \v ->
                  k (L loc v))
 
@@ -473,7 +473,7 @@ rnPatAndThen mk (ConPatIn _ con stuff)
    -- The pattern for the empty list needs to be replaced by an empty explicit list pattern when overloaded lists is turned on.
   = case unLoc con == nameRdrName (dataConName nilDataCon) of
       True    -> do { ol_flag <- liftCps $ xoptM LangExt.OverloadedLists
-                    ; if ol_flag then rnPatAndThen mk (ListPat noComments [])
+                    ; if ol_flag then rnPatAndThen mk (ListPat noAnn [])
                                  else rnConPatAndThen mk con stuff}
       False   -> rnConPatAndThen mk con stuff
 
@@ -552,6 +552,7 @@ rnHsRecPatsAndThen mk (L _ con)
   where
     mkVarPat :: SrcSpan -> IdP GhcPs -> Pat GhcPs -- AZ temp
     mkVarPat l n = VarPat noExtField (L (noAnnSrcSpan l) n)
+    -- rn_field :: (LHsRecField GhcPs (LPat GhcPs), Int) -> CpsRn (LHsRecField GhcRn (LPat GhcRn)) -- AZ
     rn_field (L l fld, n') =
       do { arg' <- rnLPatAndThen (nested_mk dd mk n') (hsRecFieldArg fld)
          ; return (L l (fld { hsRecFieldArg = arg' })) }
@@ -592,8 +593,8 @@ rnHsRecFields
        HsRecFieldContext
     -> (SrcSpan -> RdrName -> arg)
          -- When punning, use this to build a new field
-    -> HsRecFields GhcPs (Located arg)
-    -> RnM ([LHsRecField GhcRn (Located arg)], FreeVars)
+    -> HsRecFields GhcPs (LocatedA arg)
+    -> RnM ([LHsRecField GhcRn (LocatedA arg)], FreeVars)
 
 -- This surprisingly complicated pass
 --   a) looks up the field name (possibly using disambiguation)
@@ -619,8 +620,8 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
                 HsRecFieldPat con  -> Just con
                 _ {- update -}     -> Nothing
 
-    rn_fld :: Bool -> Maybe Name -> LHsRecField GhcPs (Located arg)
-           -> RnM (LHsRecField GhcRn (Located arg))
+    rn_fld :: Bool -> Maybe Name -> LHsRecField GhcPs (LocatedA arg)
+           -> RnM (LHsRecField GhcRn (LocatedA arg))
     rn_fld pun_ok parent (L l
                            (HsRecField
                               { hsRecFieldLbl =
@@ -632,7 +633,8 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
                      then do { checkErr pun_ok (badPun (L loc lbl))
                                -- Discard any module qualifier (#11662)
                              ; let arg_rdr = mkRdrUnqual (rdrNameOcc lbl)
-                             ; return (L loc (mk_arg loc arg_rdr)) }
+                             ; return (L (noAnnSrcSpan loc)
+                                                         (mk_arg loc arg_rdr)) }
                      else return arg
            ; return (L l (HsRecField
                              { hsRecFieldLbl = (L loc (FieldOcc sel (L ll lbl)))
@@ -645,8 +647,8 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
     rn_dotdot :: Maybe (Located Int)      -- See Note [DotDot fields] in GHC.Hs.Pat
               -> Maybe Name -- The constructor (Nothing for an
                                 --    out of scope constructor)
-              -> [LHsRecField GhcRn (Located arg)] -- Explicit fields
-              -> RnM ([LHsRecField GhcRn (Located arg)])   -- Field Labels we need to fill in
+              -> [LHsRecField GhcRn (LocatedA arg)] -- Explicit fields
+              -> RnM ([LHsRecField GhcRn (LocatedA arg)])   -- Field Labels we need to fill in
     rn_dotdot (Just (L loc n)) (Just con) flds -- ".." on record construction / pat match
       | not (isUnboundName con) -- This test is because if the constructor
                                 -- isn't in scope the constructor lookup will add
@@ -682,7 +684,7 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
            ; return [ L loc (HsRecField
                         { hsRecFieldLbl
                            = L loc (FieldOcc sel (L (noAnnSrcSpan loc) arg_rdr))
-                        , hsRecFieldArg = L loc (mk_arg loc arg_rdr)
+                        , hsRecFieldArg = L (noAnnSrcSpan loc) (mk_arg loc arg_rdr)
                         , hsRecPun      = False })
                     | fl <- dot_dot_fields
                     , let sel     = flSelector fl
@@ -748,7 +750,7 @@ rnHsRecUpdFields flds
                      then do { checkErr pun_ok (badPun (L loc lbl))
                                -- Discard any module qualifier (#11662)
                              ; let arg_rdr = mkRdrUnqual (rdrNameOcc lbl)
-                             ; return (L loc (HsVar noExtField
+                             ; return (L (noAnnSrcSpan loc) (HsVar noExtField
                                               (L (noAnnSrcSpan loc) arg_rdr))) }
                      else return arg
            ; (arg'', fvs) <- rnLExpr arg'

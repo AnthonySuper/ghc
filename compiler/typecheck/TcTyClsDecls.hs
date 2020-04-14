@@ -1360,7 +1360,6 @@ getInitialKind strategy
 
 getInitialKind _ (DataDecl _ _ _ _ (XHsDataDefn nec)) = noExtCon nec
 getInitialKind _ (FamDecl {tcdFam = XFamilyDecl nec}) = noExtCon nec
-getInitialKind _ (XTyClDecl nec) = noExtCon nec
 
 get_fam_decl_initial_kind
   :: Maybe TcTyCon -- ^ Just cls <=> this is an associated family of class cls
@@ -1565,7 +1564,6 @@ kcTyClDecl (FamDecl _ (FamilyDecl { fdInfo   = fd_info })) fam_tc
       _ -> return ()
 kcTyClDecl (FamDecl _ (XFamilyDecl nec))        _ = noExtCon nec
 kcTyClDecl (DataDecl _ _ _ _ (XHsDataDefn nec)) _ = noExtCon nec
-kcTyClDecl (XTyClDecl nec)                      _ = noExtCon nec
 
 -------------------
 
@@ -1585,7 +1583,7 @@ kcConDecls :: NewOrData
            -> [LConDecl GhcRn] -- The data constructors
            -> TcM ()
 kcConDecls new_or_data res_kind cons
-  = mapM_ (wrapLocM_ (kcConDecl new_or_data final_res_kind)) cons
+  = mapM_ (wrapLocMA_ (kcConDecl new_or_data final_res_kind)) cons
   where
     (_, final_res_kind) = splitPiTys res_kind
         -- See Note [kcConDecls result kind]
@@ -2029,8 +2027,6 @@ tcTyClDecl1 _parent roles_info
                               meths fundeps sigs ats at_defs
        ; return (noDerivInfos (classTyCon clas)) }
 
-tcTyClDecl1 _ _ (XTyClDecl nec) = noExtCon nec
-
 
 {- *********************************************************************
 *                                                                      *
@@ -2090,8 +2086,8 @@ tcClassDecl1 roles_info class_name hs_ctxt meths fundeps sigs ats at_defs
        ; return clas }
   where
     skol_info = TyConSkol ClassFlavour class_name
-    -- tc_fundep :: GHC.Hs.FunDep GhcRn -> TcM ([Var],[Var]) -- AZ
-    tc_fundep (FunDep x tvs1 tvs2)
+    tc_fundep :: GHC.Hs.FunDep GhcRn -> TcM ([Var],[Var])
+    tc_fundep (FunDep _ tvs1 tvs2)
                            = do { tvs1' <- mapM (tcLookupTyVar . unLoc) tvs1 ;
                                 ; tvs2' <- mapM (tcLookupTyVar . unLoc) tvs2 ;
                                 ; return (tvs1',tvs2') }
@@ -3114,7 +3110,7 @@ tcConDecls :: KnotTied TyCon -> NewOrData
            -> [TyConBinder] -> TcKind   -- binders and result kind of tycon
            -> KnotTied Type -> [LConDecl GhcRn] -> TcM [DataCon]
 tcConDecls rep_tycon new_or_data tmpl_bndrs res_kind res_tmpl
-  = concatMapM $ addLocM $
+  = concatMapM $ addLocMA $
     tcConDecl rep_tycon (mkTyConTagMap rep_tycon)
               tmpl_bndrs res_kind res_tmpl new_or_data
     -- It's important that we pay for tag allocation here, once per TyCon,
