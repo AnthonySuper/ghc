@@ -2835,7 +2835,7 @@ aexp2   :: { ECP }
 
         | '(#' texp '#)'                { ECP $
                                            runECP_PV $2 >>= \ $2 ->
-                                           mkSumOrTuplePV (noAnnSrcSpan $ comb2 $1 $>) Unboxed (Tuple [L (glA $2) (Just $2)])
+                                           mkSumOrTuplePV (noAnnSrcSpan $ comb2 $1 $>) Unboxed (Tuple [L (gl $2) (Just $2)])
                                                  [mo $1,mc $3] }
         | '(#' tup_exprs '#)'           { ECP $
                                            $2 >>= \ $2 ->
@@ -2954,42 +2954,37 @@ tup_exprs :: { forall b. DisambECP b => PV ([AddApiAnn],SumOrTuple b) }
            : texp commas_tup_tail
                            { runECP_PV $1 >>= \ $1 ->
                              $2 >>= \ $2 ->
-                             do { addAnnotation (glA $1) AnnComma (fst $2)
-                                ; return ([],Tuple ((sL1A $1 (Just $1)) : snd $2)) } }
--- AZ working above
-
+                             do { t <- amsA (sL1 $1 (Just $1)) [AddApiAnn AnnComma (fst $2)]
+                                ; return ([],Tuple (t : snd $2)) } }
 
            | texp bars   { runECP_PV $1 >>= \ $1 -> return $
                             (mvbars (fst $2), Sum 1  (snd $2 + 1) $1) }
 
            | commas tup_tail
                  { $2 >>= \ $2 ->
-                   do { mapM_ (\ll -> addAnnotation ll AnnComma ll) (fst $1)
-                      ; return
-                           ([],Tuple (map (\l -> L l Nothing) (fst $1) ++ $2)) } }
+                   do { cos <- mapM (\ll -> amsr (L ll Nothing) [AddApiAnn AnnComma ll]) (fst $1)
+                      ; return ([],Tuple (cos ++ $2)) } }
 
            | bars texp bars0
                 { runECP_PV $2 >>= \ $2 -> return $
                   (mvbars (fst $1) ++ mvbars (fst $3), Sum (snd $1 + 1) (snd $1 + snd $3 + 1) $2) }
 
 -- Always starts with commas; always follows an expr
-commas_tup_tail :: { forall b. DisambECP b => PV (SrcSpan,[Located (Maybe (LocatedA b))]) }
+commas_tup_tail :: { forall b. DisambECP b => PV (SrcSpan,[LocatedA (Maybe (LocatedA b))]) }
 commas_tup_tail : commas tup_tail
         { $2 >>= \ $2 ->
-          do { mapM_ (\ll -> addAnnotation ll AnnComma ll) (tail $ fst $1)
-             ; return (
-            (head $ fst $1
-            ,(map (\l -> L l Nothing) (tail $ fst $1)) ++ $2)) } }
+          do { cos <- mapM (\l -> amsr (L l Nothing) [AddApiAnn AnnComma l]) (tail $ fst $1)
+             ; return ((head $ fst $1, cos ++ $2)) } }
 
 -- Always follows a comma
-tup_tail :: { forall b. DisambECP b => PV [Located (Maybe (LocatedA b))] }
+tup_tail :: { forall b. DisambECP b => PV [LocatedA (Maybe (LocatedA b))] }
           : texp commas_tup_tail { runECP_PV $1 >>= \ $1 ->
                                    $2 >>= \ $2 ->
-                                   addAnnotation (glA $1) AnnComma (fst $2) >>
-                                   return ((L (glA $1) (Just $1)) : snd $2) }
+                                   do { t <- amsA (L (gl $1) (Just $1)) [AddApiAnn AnnComma (fst $2)]
+                                      ; return (t : snd $2) } }
           | texp                 { runECP_PV $1 >>= \ $1 ->
-                                   return [L (glA $1) (Just $1)] }
-          | {- empty -}          { return [noLoc Nothing] }
+                                   return [L (gl $1) (Just $1)] }
+          | {- empty -}          { return [noLocA Nothing] }
 
 -----------------------------------------------------------------------------
 -- List expressions
@@ -3049,7 +3044,7 @@ flattenedpquals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
                     -- We just had one thing in our "parallel" list so
                     -- we simply return that thing directly
 
-                    qss -> sL1 $1 [sL1 $1 $ ParStmt noExtField [ParStmtBlock noExtField qs [] noSyntaxExpr |
+                    qss -> sL1 $1 [sL1a $1 $ ParStmt noExtField [ParStmtBlock noExtField qs [] noSyntaxExpr |
                                             qs <- qss]
                                             noExpr noSyntaxExpr]
                     -- We actually found some actual parallel lists so
@@ -3058,24 +3053,26 @@ flattenedpquals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
 
 pquals :: { Located [[LStmt GhcPs (LHsExpr GhcPs)]] }
     : squals '|' pquals
-                     {% addAnnotation (gl $ head $ unLoc $1) AnnVbar (gl $2) >>
+                     {% addAnnotation (glA $ head $ unLoc $1) AnnVbar (gl $2) >>
                         return (sLL $1 $> (reverse (unLoc $1) : unLoc $3)) }
+-- AZ working above
+
     | squals         { L (getLoc $1) [reverse (unLoc $1)] }
 
 squals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }   -- In reverse order, because the last
                                         -- one can "grab" the earlier ones
     : squals ',' transformqual
-             {% addAnnotation (gl $ head $ unLoc $1) AnnComma (gl $2) >>
+             {% addAnnotation (glA $ head $ unLoc $1) AnnComma (gl $2) >>
                 amsL (comb2 $1 $>) (fst $ unLoc $3) >>
-                return (sLL $1 $> [sLL $1 $> ((snd $ unLoc $3) (reverse (unLoc $1)))]) }
+                return (sLL $1 $> [sLLa $1 $> ((snd $ unLoc $3) (reverse (unLoc $1)))]) }
     | squals ',' qual
              {% runPV $3 >>= \ $3 ->
-                addAnnotation (gl $ head $ unLoc $1) AnnComma (gl $2) >>
-                return (sLL $1 $> ($3 : unLoc $1)) }
+                addAnnotation (glA $ head $ unLoc $1) AnnComma (gl $2) >>
+                return (sLL $1 (reLoc $>) ($3 : unLoc $1)) }
     | transformqual        {% ams (\_ -> $1) (fst $ unLoc $1) >>
-                              return (sLL $1 $> [L (getLoc $1) ((snd $ unLoc $1) [])]) }
+                              return (sLL $1 $> [L (getLocAnn $1) ((snd $ unLoc $1) [])]) }
     | qual                               {% runPV $1 >>= \ $1 ->
-                                            return $ sL1 $1 [$1] }
+                                            return $ sL1A $1 [$1] }
 --  | transformquals1 ',' '{|' pquals '|}'   { sLL $1 $> ($4 : unLoc $1) }
 --  | '{|' pquals '|}'                       { sL1 $1 [$2] }
 
@@ -3116,11 +3113,11 @@ guardquals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
 
 guardquals1 :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
     : guardquals1 ',' qual  {% runPV $3 >>= \ $3 ->
-                               addAnnotation (gl $ head $ unLoc $1) AnnComma
+                               addAnnotation (glA $ head $ unLoc $1) AnnComma
                                              (gl $2) >>
-                               return (sLL $1 $> ($3 : unLoc $1)) }
+                               return (sLL $1 (reLoc $>) ($3 : unLoc $1)) }
     | qual                  {% runPV $1 >>= \ $1 ->
-                               return $ sL1 $1 [$1] }
+                               return $ sL1A $1 [$1] }
 
 -----------------------------------------------------------------------------
 -- Case alternatives
@@ -3237,22 +3234,21 @@ stmts :: { forall b. DisambECP b => PV (Located ([AddApiAnn],[LStmt GhcPs (Locat
         : stmts ';' stmt  { $1 >>= \ $1 ->
                             $3 >>= \ $3 ->
                             if null (snd $ unLoc $1)
-                              then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1)
+                              then return (sLL $1 (reLoc $>) (mj AnnSemi $2:(fst $ unLoc $1)
                                                      ,$3   : (snd $ unLoc $1)))
                               else do
-                               { ams (\_ -> head $ snd $ unLoc $1) [mj AnnSemi $2]
-                               ; return $ sLL $1 $> (fst $ unLoc $1,$3 :(snd $ unLoc $1)) }}
+                               { amsA (head $ snd $ unLoc $1) [mj AnnSemi $2]
+                               ; return $ sLL $1 (reLoc $>) (fst $ unLoc $1,$3 :(snd $ unLoc $1)) }}
 
         | stmts ';'     {  $1 >>= \ $1 ->
                            if null (snd $ unLoc $1)
                              then return (sLL $1 $> (mj AnnSemi $2:(fst $ unLoc $1),snd $ unLoc $1))
                              else do
-                               { ams (\_ -> head $ snd $ unLoc $1)
-                                               [mj AnnSemi $2]
+                               { amsA (head $ snd $ unLoc $1) [mj AnnSemi $2]
                                ; return $1 }
           }
         | stmt                   { $1 >>= \ $1 ->
-                                   return $ sL1 $1 ([],[$1]) }
+                                   return $ sL1A $1 ([],[$1]) }
         | {- empty -}            { return $ noLoc ([],[]) }
 
 
@@ -3269,16 +3265,16 @@ e_stmt :: { LStmt GhcPs (LHsExpr GhcPs) }
 stmt  :: { forall b. DisambECP b => PV (LStmt GhcPs (LocatedA b)) }
         : qual                          { $1 }
         | 'rec' stmtlist                {  $2 >>= \ $2 ->
-                                           ams (\_ -> sLL $1 $> $ mkRecStmt (snd $ unLoc $2))
+                                           amsr (sLL $1 $> $ mkRecStmt (snd $ unLoc $2))
                                                (mj AnnRec $1:(fst $ unLoc $2)) }
 
 qual  :: { forall b. DisambECP b => PV (LStmt GhcPs (LocatedA b)) }
     : bindpat '<-' exp                   { runECP_PV $3 >>= \ $3 ->
-                                           ams (\_ -> sLLlA (reLoc $1) $> $ mkBindStmt $1 $3)
+                                           amsr (sLLlA (reLoc $1) $> $ mkBindStmt $1 $3)
                                                [mu AnnLarrow $2] }
     | exp                                { runECP_PV $1 >>= \ $1 ->
-                                           return $ sL1A $1 $ mkBodyStmt $1 }
-    | 'let' binds                        { ams (\_ -> sLL $1 $> $ LetStmt noExtField (snd $ unLoc $2))
+                                           return $ sL1 $1 $ mkBodyStmt $1 }
+    | 'let' binds                        { amsr (sLL $1 $> $ LetStmt noExtField (snd $ unLoc $2))
                                                (mj AnnLet $1:(fst $ unLoc $2)) }
 
 -----------------------------------------------------------------------------
@@ -3923,6 +3919,10 @@ sL1a x = sL (noAnnSrcSpan $ getLoc x)   -- #define sL1   sL (getLoc $1)
 {-# INLINE sLL #-}
 sLL :: Located a -> Located b -> c -> Located c
 sLL x y = sL (comb2 x y) -- #define LL   sL (comb2 $1 $>)
+
+{-# INLINE sLLa #-}
+sLLa :: Located a -> Located b -> c -> LocatedA c
+sLLa x y = sL (noAnnSrcSpan $ comb2 x y) -- #define LL   sL (comb2 $1 $>)
 
 {-# INLINE sLLlA #-}
 sLLlA :: Located a -> LocatedA b -> c -> Located c

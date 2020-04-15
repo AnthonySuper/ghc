@@ -389,7 +389,7 @@ tcStmtsAndThen ctxt stmt_chk (L loc stmt : stmts) res_ty thing_inside
   -- For the vanilla case, handle the location-setting part
   | otherwise
   = do  { (stmt', (stmts', thing)) <-
-                setSrcSpan loc                              $
+                setSrcSpanA loc                             $
                 addErrCtxt (pprStmtInCtxt ctxt stmt)        $
                 stmt_chk ctxt stmt res_ty                   $ \ res_ty' ->
                 popErrCtxt                                  $

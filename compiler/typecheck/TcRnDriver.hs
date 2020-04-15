@@ -2180,12 +2180,12 @@ tcUserStmt (L loc (BodyStmt _ expr _ _))
         ; ghciStep <- getGhciStepIO
         ; uniq <- newUnique
         ; interPrintName <- getInteractivePrintName
-        ; let fresh_it  = itName uniq loc
-              matches   = [mkMatch (mkPrefixFunRhs (L (noAnnSrcSpan loc) fresh_it)) [] rn_expr
+        ; let fresh_it  = itName uniq (locA loc)
+              matches   = [mkMatch (mkPrefixFunRhs (L loc fresh_it)) [] rn_expr
                                    (noLoc emptyLocalBinds)]
               -- [it = expr]
-              the_bind  = L (noAnnSrcSpan loc) $ (mkTopFunBind FromSource
-                                     (L (noAnnSrcSpan loc) fresh_it) matches)
+              the_bind  = L loc $ (mkTopFunBind FromSource
+                                     (L loc fresh_it) matches)
                                          { fun_ext = fvs }
               -- Care here!  In GHCi the expression might have
               -- free variables, and they in turn may have free type variables
@@ -2198,7 +2198,7 @@ tcUserStmt (L loc (BodyStmt _ expr _ _))
 
               -- [it <- e]
               bind_stmt = L loc $ BindStmt noExtField
-                                       (L (noAnnSrcSpan loc) (VarPat noExtField (L (noAnnSrcSpan loc) fresh_it)))
+                                       (L loc (VarPat noExtField (L loc fresh_it)))
                                        (nlHsApp ghciStep rn_expr)
                                        (mkRnSyntaxExpr bindIOName)
                                        noSyntaxExpr
@@ -2431,7 +2431,7 @@ tcGhciStmts stmts
                                                       , getRuntimeRep unitTy
                                                       , idType id, unitTy]
                                           `nlHsApp` nlHsVar id
-            stmts = tc_stmts ++ [noLoc (mkLastStmt ret_expr)]
+            stmts = tc_stmts ++ [noLocA (mkLastStmt ret_expr)]
 
       ; return (ids, mkHsDictLet (EvBinds const_binds) $
                      noLocA (HsDo io_ret_ty GhciStmtCtxt (noLoc stmts)))

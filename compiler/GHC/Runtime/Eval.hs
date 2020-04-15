@@ -1189,7 +1189,7 @@ compileParsedExprRemote expr@(L loc _) = withSession $ \hsc_env -> do
   let expr_fs = fsLit "_compileParsedExpr"
       loc' = locA loc
       expr_name = mkInternalName (getUnique expr_fs) (mkTyVarOccFS expr_fs) loc'
-      let_stmt = L loc' . LetStmt noExtField . L loc' . (HsValBinds noExtField) $
+      let_stmt = L loc . LetStmt noExtField . L loc' . (HsValBinds noExtField) $
         ValBinds noExtField
                      (unitBag $ mkHsVarBind loc' (getRdrName expr_name) expr) []
 

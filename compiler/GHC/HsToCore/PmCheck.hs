@@ -654,8 +654,8 @@ translateLGRHS fam_insts match_loc pats (L _loc (GRHS _ gs _)) =
   mkGrdTreeRhs loc_sdoc <$> concatMapM (translateGuard fam_insts . unLoc) gs
     where
       loc_sdoc
-        | null gs   = L match_loc (sep (map ppr pats))
-        | otherwise = L grd_loc   (sep (map ppr pats) <+> vbar <+> interpp'SP gs)
+        | null gs   = L match_loc      (sep (map ppr pats))
+        | otherwise = L (locA grd_loc) (sep (map ppr pats) <+> vbar <+> interpp'SP gs)
       L grd_loc _ = head gs
 translateLGRHS _ _ _ (L _ (XGRHS nec)) = noExtCon nec
 

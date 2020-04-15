@@ -1075,7 +1075,7 @@ cvt_tup es boxity = do { let cvtl_maybe Nothing  = return missingTupArg
                        ; es' <- mapM cvtl_maybe es
                        ; return $ ExplicitTuple
                                     noAnn
-                                    (map noLoc es')
+                                    (map noLocA es')
                                     boxity }
 
 {- Note [Operator association]
@@ -1165,16 +1165,16 @@ cvtStmts :: [TH.Stmt] -> CvtM [Hs.LStmt GhcPs (LHsExpr GhcPs)]
 cvtStmts = mapM cvtStmt
 
 cvtStmt :: TH.Stmt -> CvtM (Hs.LStmt GhcPs (LHsExpr GhcPs))
-cvtStmt (NoBindS e)    = do { e' <- cvtl e; returnL $ mkBodyStmt e' }
-cvtStmt (TH.BindS p e) = do { p' <- cvtPat p; e' <- cvtl e; returnL $ mkBindStmt p' e' }
+cvtStmt (NoBindS e)    = do { e' <- cvtl e; returnLA $ mkBodyStmt e' }
+cvtStmt (TH.BindS p e) = do { p' <- cvtPat p; e' <- cvtl e; returnLA $ mkBindStmt p' e' }
 cvtStmt (TH.LetS ds)   = do { ds' <- cvtLocalDecs (text "a let binding") ds
-                            ; returnL $ LetStmt noExtField (noLoc ds') }
+                            ; returnLA $ LetStmt noExtField (noLoc ds') }
 cvtStmt (TH.ParS dss)  = do { dss' <- mapM cvt_one dss
-                            ; returnL $ ParStmt noExtField dss' noExpr noSyntaxExpr }
+                            ; returnLA $ ParStmt noExtField dss' noExpr noSyntaxExpr }
   where
     cvt_one ds = do { ds' <- cvtStmts ds
                     ; return (ParStmtBlock noExtField ds' undefined noSyntaxExpr) }
-cvtStmt (TH.RecS ss) = do { ss' <- mapM cvtStmt ss; returnL (mkRecStmt ss') }
+cvtStmt (TH.RecS ss) = do { ss' <- mapM cvtStmt ss; returnLA (mkRecStmt ss') }
 
 cvtMatch :: HsMatchContext RdrName
          -> TH.Match -> CvtM (Hs.LMatch GhcPs (LHsExpr GhcPs))
@@ -1194,7 +1194,7 @@ cvtGuard (NormalB e)      = do { e' <- cvtl e
 
 cvtpair :: (TH.Guard, TH.Exp) -> CvtM (LGRHS GhcPs (LHsExpr GhcPs))
 cvtpair (NormalG ge,rhs) = do { ge' <- cvtl ge; rhs' <- cvtl rhs
-                              ; g' <- returnL $ mkBodyStmt ge'
+                              ; g' <- returnLA $ mkBodyStmt ge'
                               ; returnL $ GRHS noAnn [g'] rhs' }
 cvtpair (PatG gs,rhs)    = do { gs' <- cvtStmts gs; rhs' <- cvtl rhs
                               ; returnL $ GRHS noAnn gs' rhs' }

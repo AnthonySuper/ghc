@@ -582,11 +582,11 @@ methodNamesGRHS (L _ (GRHS _ _ rhs)) = methodNamesLCmd rhs
 methodNamesGRHS (L _ (XGRHS nec)) = noExtCon nec
 
 ---------------------------------------------------
-methodNamesStmts :: [Located (StmtLR GhcRn GhcRn (LHsCmd GhcRn))] -> FreeVars
+methodNamesStmts :: [LStmtLR GhcRn GhcRn (LHsCmd GhcRn)] -> FreeVars
 methodNamesStmts stmts = plusFVs (map methodNamesLStmt stmts)
 
 ---------------------------------------------------
-methodNamesLStmt :: Located (StmtLR GhcRn GhcRn (LHsCmd GhcRn)) -> FreeVars
+methodNamesLStmt :: LStmtLR GhcRn GhcRn (LHsCmd GhcRn) -> FreeVars
 methodNamesLStmt = methodNamesStmt . unLoc
 
 methodNamesStmt :: StmtLR GhcRn GhcRn (LHsCmd GhcRn) -> FreeVars
@@ -748,7 +748,7 @@ rnStmtsWithFreeVars ctxt _ [] thing_inside
 rnStmtsWithFreeVars MDoExpr rnBody stmts thing_inside    -- Deal with mdo
   = -- Behave like do { rec { ...all but last... }; last }
     do { ((stmts1, (stmts2, thing)), fvs)
-           <- rnStmt MDoExpr rnBody (noLoc $ mkRecStmt all_but_last) $ \ _ ->
+           <- rnStmt MDoExpr rnBody (noLocA $ mkRecStmt all_but_last) $ \ _ ->
               do { last_stmt' <- checkLastStmt MDoExpr last_stmt
                  ; rnStmt MDoExpr rnBody last_stmt' thing_inside }
         ; return (((stmts1 ++ stmts2), thing), fvs) }
@@ -757,13 +757,13 @@ rnStmtsWithFreeVars MDoExpr rnBody stmts thing_inside    -- Deal with mdo
 
 rnStmtsWithFreeVars ctxt rnBody (lstmt@(L loc _) : lstmts) thing_inside
   | null lstmts
-  = setSrcSpan loc $
+  = setSrcSpanA loc $
     do { lstmt' <- checkLastStmt ctxt lstmt
        ; rnStmt ctxt rnBody lstmt' thing_inside }
 
   | otherwise
   = do { ((stmts1, (stmts2, thing)), fvs)
-            <- setSrcSpan loc                         $
+            <- setSrcSpanA loc                  $
                do { checkStmt ctxt lstmt
                   ; rnStmt ctxt rnBody lstmt    $ \ bndrs1 ->
                     rnStmtsWithFreeVars ctxt rnBody lstmts  $ \ bndrs2 ->
@@ -878,7 +878,7 @@ rnStmt ctxt rnBody (L loc (RecStmt { recS_stmts = rec_stmts })) thing_inside
                               segs
           -- See Note [Deterministic ApplicativeDo and RecursiveDo desugaring]
         ; (thing, fvs_later) <- thing_inside bndrs
-        ; let (rec_stmts', fvs) = segmentRecStmts loc ctxt empty_rec_stmt segs fvs_later
+        ; let (rec_stmts', fvs) = segmentRecStmts (locA loc) ctxt empty_rec_stmt segs fvs_later
         -- We aren't going to try to group RecStmts with
         -- ApplicativeDo, so attaching empty FVs is fine.
         ; return ( ((zip rec_stmts' (repeat emptyNameSet)), thing)
@@ -1243,7 +1243,7 @@ segmentRecStmts loc ctxt empty_rec_stmt segs fvs_later
                 --         used 'after' the RecStmt
 
   | otherwise
-  = ([ L loc $
+  = ([ L (noAnnSrcSpan loc) $
        empty_rec_stmt { recS_stmts = ss
                       , recS_later_ids = nameSetElemsStable
                                            (defs `intersectNameSet` fvs_later)
@@ -1960,7 +1960,7 @@ mkApplicativeStmt ctxt args need_join body_stmts
                 ; return (Just join_op, fvs) }
            else
              return (Nothing, emptyNameSet)
-       ; let applicative_stmt = noLoc $ ApplicativeStmt noExtField
+       ; let applicative_stmt = noLocA $ ApplicativeStmt noExtField
                (zip (fmap_op : repeat ap_op) args)
                mb_join
        ; return ( applicative_stmt : body_stmts

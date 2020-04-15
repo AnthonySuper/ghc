@@ -834,7 +834,7 @@ gen_Ix_binds loc tycon = do
       where
         stmts = zipWith3Equal "single_con_range" mk_qual as_needed bs_needed cs_needed
 
-        mk_qual a b c = noLoc $ mkBindStmt (nlVarPat c)
+        mk_qual a b c = noLocA $ mkBindStmt (nlVarPat c)
                                  (nlHsApp (nlHsVar range_RDR)
                                           (mkLHsVarTuple [a,b] noAnn))
 
@@ -982,7 +982,7 @@ gen_Read_binds get_fixity loc tycon
     read_nullary_cons
       = case nullary_cons of
             []    -> []
-            [con] -> [nlHsDo DoExpr (match_con con ++ [noLoc $ mkLastStmt (result_expr con [])])]
+            [con] -> [nlHsDo DoExpr (match_con con ++ [noLocA $ mkLastStmt (result_expr con [])])]
             _     -> [nlHsApp (nlHsVar choose_RDR)
                               (nlList (map mk_pair nullary_cons))]
         -- NB For operators the parens around (:=:) are matched by the
@@ -1021,20 +1021,24 @@ gen_Read_binds get_fixity loc tycon
             | isSym con_str = [symbol_pat con_str]
             | otherwise     = [read_punc "`"] ++ ident_h_pat con_str ++ [read_punc "`"]
 
+        prefix_stmts :: [LStmt GhcPs (LHsExpr GhcPs)] -- AZ
         prefix_stmts            -- T a b c
           = read_prefix_con ++ read_args
 
+        infix_stmts :: [LStmt GhcPs (LHsExpr GhcPs)] -- AZ
         infix_stmts             -- a %% b, or  a `T` b
           = [read_a1]
             ++ read_infix_con
             ++ [read_a2]
 
+        record_stmts :: [LStmt GhcPs (LHsExpr GhcPs)] -- AZ
         record_stmts            -- T { f1 = a, f2 = b }
           = read_prefix_con
             ++ [read_punc "{"]
             ++ concat (intersperse [read_punc ","] field_stmts)
             ++ [read_punc "}"]
 
+        field_stmts :: [[LStmt GhcPs (LHsExpr GhcPs)]] -- AZ
         field_stmts  = zipWithEqual "lbl_stmts" read_field labels as_needed
 
         con_arity    = dataConSourceArity data_con
@@ -1043,6 +1047,7 @@ gen_Read_binds get_fixity loc tycon
         is_infix     = dataConIsInfix data_con
         is_record    = labels `lengthExceeds` 0
         as_needed    = take con_arity as_RDRs
+        read_args :: [LStmt GhcPs (LHsExpr GhcPs)] -- AZ
         read_args    = zipWithEqual "gen_Read_binds" read_arg as_needed (dataConOrigArgTys data_con)
         (read_a1:read_a2:_) = read_args
 
@@ -1056,7 +1061,7 @@ gen_Read_binds get_fixity loc tycon
     ------------------------------------------------------------------------
     mk_alt e1 e2       = genOpApp e1 alt_RDR e2                         -- e1 +++ e2
     mk_parser p ss b   = nlHsApps prec_RDR [nlHsIntLit p                -- prec p (do { ss ; b })
-                                           , nlHsDo DoExpr (ss ++ [noLoc $ mkLastStmt b])]
+                                           , nlHsDo DoExpr (ss ++ [noLocA $ mkLastStmt b])]
     con_app con as     = nlHsVarApps (getRdrName con) as                -- con as
     result_expr con as = nlHsApp (nlHsVar returnM_RDR) (con_app con as) -- return (con as)
 
@@ -1066,7 +1071,7 @@ gen_Read_binds get_fixity loc tycon
     ident_h_pat s | Just (ss, '#') <- snocView s = [ ident_pat ss, symbol_pat "#" ]
                   | otherwise                    = [ ident_pat s ]
 
-    bindLex pat  = noLoc (mkBodyStmt (nlHsApp (nlHsVar expectP_RDR) pat))  -- expectP p
+    bindLex pat  = noLocA (mkBodyStmt (nlHsApp (nlHsVar expectP_RDR) pat)) -- expectP p
                    -- See Note [Use expectP]
     ident_pat  s = bindLex $ nlHsApps ident_RDR  [nlHsLit (mkHsString s)]  -- expectP (Ident "foo")
     symbol_pat s = bindLex $ nlHsApps symbol_RDR [nlHsLit (mkHsString s)]  -- expectP (Symbol ">>")
@@ -1075,7 +1080,7 @@ gen_Read_binds get_fixity loc tycon
     data_con_str con = occNameString (getOccName con)
 
     read_arg a ty = ASSERT( not (isUnliftedType ty) )
-                    noLoc (mkBindStmt (nlVarPat a) (nlHsVarApps step_RDR [readPrec_RDR]))
+                    noLocA (mkBindStmt (nlVarPat a) (nlHsVarApps step_RDR [readPrec_RDR]))
 
     -- When reading field labels we might encounter
     --      a  = 3
@@ -1083,7 +1088,7 @@ gen_Read_binds get_fixity loc tycon
     -- or   (#) = 4
     -- Note the parens!
     read_field lbl a =
-        [noLoc
+        [noLocA
           (mkBindStmt
             (nlVarPat a)
             (nlHsApp

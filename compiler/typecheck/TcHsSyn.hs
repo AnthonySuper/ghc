@@ -1112,7 +1112,7 @@ zonkStmts :: ZonkEnv
           -> [LStmt GhcTcId (LocatedA (body GhcTcId))]
           -> TcM (ZonkEnv, [LStmt GhcTc (LocatedA (body GhcTc))])
 zonkStmts env _ []     = return (env, [])
-zonkStmts env zBody (s:ss) = do { (env1, s')  <- wrapLocSndM (zonkStmt env zBody) s
+zonkStmts env zBody (s:ss) = do { (env1, s')  <- wrapLocSndMA (zonkStmt env zBody) s
                                 ; (env2, ss') <- zonkStmts env1 zBody ss
                                 ; return (env2, s' : ss') }
 

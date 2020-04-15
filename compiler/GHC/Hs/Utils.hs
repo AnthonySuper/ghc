@@ -286,12 +286,12 @@ mkHsIntegral     i  = OverLit noExtField (HsIntegral       i) noExpr
 mkHsFractional   f  = OverLit noExtField (HsFractional     f) noExpr
 mkHsIsString src s  = OverLit noExtField (HsIsString   src s) noExpr
 
-mkHsDo     ctxt stmts      = HsDo noAnn ctxt (mkLocatedList stmts)
-mkHsDoAnns ctxt stmts anns = HsDo anns  ctxt (mkLocatedList stmts)
+mkHsDo     ctxt stmts      = HsDo noAnn ctxt (mkLocatedListA stmts)
+mkHsDoAnns ctxt stmts anns = HsDo anns  ctxt (mkLocatedListA stmts)
 mkHsComp ctxt stmts expr = mkHsCompAnns ctxt stmts expr noAnn
 mkHsCompAnns ctxt stmts expr anns = mkHsDoAnns ctxt (stmts ++ [last_stmt]) anns
   where
-    last_stmt = L (getLocA expr) $ mkLastStmt expr
+    last_stmt = L (getLoc expr) $ mkLastStmt expr
 
 -- restricted to GhcPs because other phases might need a SyntaxExpr
 mkHsIf :: LHsExpr GhcPs -> LHsExpr GhcPs -> LHsExpr GhcPs -> ApiAnn
@@ -545,7 +545,7 @@ mkLHsTupleExpr :: [LHsExpr (GhcPass a)] -> XExplicitTuple (GhcPass a)
 -- Makes a pre-typechecker boxed tuple, deals with 1 case
 mkLHsTupleExpr [e] _ = e
 mkLHsTupleExpr es ext
-  = noLocA $ ExplicitTuple ext (map (noLoc . (Present noExtField)) es) Boxed
+  = noLocA $ ExplicitTuple ext (map (noLocA . (Present noExtField)) es) Boxed
 
 mkLHsVarTuple :: [IdP (GhcPass a)]  -> XExplicitTuple (GhcPass a)
               -> LHsExpr (GhcPass a)

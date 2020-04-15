@@ -964,7 +964,7 @@ tcPatToExpr name args pat = go pat
       | otherwise                   = notInvertibleListPat p
     go1 (TuplePat _ pats box)       = do { exprs <- mapM go pats
                                          ; return $ ExplicitTuple noExtField
-                                           (map (noLoc . (Present noExtField)) exprs)
+                                           (map (noLocA . (Present noExtField)) exprs)
                                                                            box }
     go1 (SumPat _ pat alt arity)    = do { expr <- go1 (unLoc pat)
                                          ; return $ ExplicitSum noExtField alt arity

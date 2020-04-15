@@ -785,7 +785,7 @@ dsCmdDo _ _ _ [] _ = panic "dsCmdDo"
 --              ---> premap (\ (xs) -> ((xs), ())) c
 
 dsCmdDo ids local_vars res_ty [L loc (LastStmt _ body _ _)] env_ids = do
-    putSrcSpanDs loc $ dsNoLevPoly res_ty
+    putSrcSpanDsA loc $ dsNoLevPoly res_ty
                          (text "In the command:" <+> ppr body)
     (core_body, env_ids') <- dsLCmd ids local_vars unitTy res_ty body env_ids
     let env_ty = mkBigCoreVarTupTy env_ids

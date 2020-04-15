@@ -891,7 +891,7 @@ instance ( ToHie (LocatedA body)
          ) => ToHie (LGRHS a (LocatedA body)) where
   toHie (L span g) = concatM $ makeNode g span : case g of
     GRHS _ guards body ->
-      [ toHie $ listScopes (mkLScopeA body) guards
+      [ toHie $ listScopesA (mkLScopeA body) guards
       , toHie body
       ]
     XGRHS _ -> []
@@ -991,7 +991,7 @@ instance ( a ~ GhcPass p
         ]
       HsDo _ _ (L ispan stmts) ->
         [ pure $ locOnly ispan
-        , toHie $ listScopes NoScope stmts
+        , toHie $ listScopesA NoScope stmts
         ]
       ExplicitList _ _ exprs ->
         [ toHie exprs
@@ -1054,7 +1054,7 @@ instance ( a ~ GhcPass p
          , ToHie (LHsExpr a)
          , Data (HsTupArg a)
          ) => ToHie (LHsTupArg (GhcPass p)) where
-  toHie (L span arg) = concatM $ makeNode arg span : case arg of
+  toHie (L span arg) = concatM $ makeNode arg (locA span) : case arg of
     Present _ expr ->
       [ toHie expr
       ]
@@ -1071,7 +1071,7 @@ instance ( a ~ GhcPass p
          , Data (StmtLR a a (LocatedA body))
          , Data (StmtLR a a (LHsExpr a))
          ) => ToHie (RScoped (LStmt (GhcPass p) (LocatedA body))) where
-  toHie (RS scope (L span stmt)) = concatM $ makeNode stmt span : case stmt of
+  toHie (RS scope (L span stmt)) = concatM $ makeNode stmt (locA span) : case stmt of
       LastStmt _ body _ _ ->
         [ toHie body
         ]
@@ -1090,16 +1090,16 @@ instance ( a ~ GhcPass p
         ]
       ParStmt _ parstmts _ _ ->
         [ concatMapM (\(ParStmtBlock _ stmts _ _) ->
-                          toHie $ listScopes NoScope stmts)
+                          toHie $ listScopesA NoScope stmts)
                      parstmts
         ]
       TransStmt {trS_stmts = stmts, trS_using = using, trS_by = by} ->
-        [ toHie $ listScopes scope stmts
+        [ toHie $ listScopesA scope stmts
         , toHie using
         , toHie by
         ]
       RecStmt {recS_stmts = stmts} ->
-        [ toHie $ map (RS $ combineScopes scope (mkScope span)) stmts
+        [ toHie $ map (RS $ combineScopes scope (mkScope (locA span))) stmts
         ]
       XStmtLR nec -> noExtCon nec
 
@@ -1210,7 +1210,7 @@ instance ( a ~ GhcPass p
     , toHie expr
     ]
   toHie (RS sc (ApplicativeArgMany _ stmts _ pat)) = concatM
-    [ toHie $ listScopes NoScope stmts
+    [ toHie $ listScopesA NoScope stmts
     , toHie $ PS Nothing sc NoScope pat
     ]
   toHie (RS _ (XApplicativeArg nec)) = noExtCon nec
@@ -1276,7 +1276,7 @@ instance ( a ~ GhcPass p
         ]
       HsCmdDo _ (L ispan stmts) ->
         [ pure $ locOnly ispan
-        , toHie $ listScopes NoScope stmts
+        , toHie $ listScopesA NoScope stmts
         ]
       XCmd _ -> []
 

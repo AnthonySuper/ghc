@@ -927,7 +927,7 @@ dsDo stmts
   = goL stmts
   where
     goL [] = panic "dsDo"
-    goL ((L loc stmt):lstmts) = putSrcSpanDs loc (go loc stmt lstmts)
+    goL ((L loc stmt):lstmts) = putSrcSpanDsA loc (go loc stmt lstmts)
 
     go _ (LastStmt _ body _ _) stmts
       = ASSERT( null stmts ) dsLExpr body
@@ -960,7 +960,7 @@ dsDo stmts
                do_arg (ApplicativeArgOne _ pat expr _ fail_op) =
                  ((pat, fail_op), dsLExpr expr)
                do_arg (ApplicativeArgMany _ stmts ret pat) =
-                 ((pat, noSyntaxExpr), dsDo (stmts ++ [noLoc $ mkLastStmt (noLocA ret)]))
+                 ((pat, noSyntaxExpr), dsDo (stmts ++ [noLocA $ mkLastStmt (noLocA ret)]))
                do_arg (XApplicativeArg nec) = noExtCon nec
 
            ; rhss' <- sequence rhss
@@ -1012,7 +1012,7 @@ dsDo stmts
         body         = noLocA $ HsDo body_ty
                                  DoExpr (noLoc (rec_stmts ++ [ret_stmt]))
         ret_app      = nlHsSyntaxApps return_op [mkBigLHsTupId rets]
-        ret_stmt     = noLoc $ mkLastStmt ret_app
+        ret_stmt     = noLocA $ mkLastStmt ret_app
                      -- This LastStmt will be desugared with dsDo,
                      -- which ignores the return_op in the LastStmt,
                      -- so we must apply the return_op explicitly

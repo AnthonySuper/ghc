@@ -3188,7 +3188,7 @@ hintBangPat span e = do
 
 data SumOrTuple b
   = Sum ConTag Arity (LocatedA b)
-  | Tuple [Located (Maybe (LocatedA b))]
+  | Tuple [LocatedA (Maybe (LocatedA b))]
 
 pprSumOrTuple :: Outputable b => Boxity -> SumOrTuple b -> SDoc
 pprSumOrTuple boxity = \case
@@ -3214,7 +3214,7 @@ mkSumOrTupleExpr l boxity (Tuple es) anns = do
     cs <- addAnnsAt (locA l) []
     return $ L l (ExplicitTuple (ApiAnn anns cs) (map toTupArg es) boxity)
   where
-    toTupArg :: Located (Maybe (LHsExpr GhcPs)) -> LHsTupArg GhcPs
+    toTupArg :: LocatedA (Maybe (LHsExpr GhcPs)) -> LHsTupArg GhcPs
     toTupArg = mapLoc (maybe missingTupArg (Present noExtField))
 
 -- Sum
@@ -3235,9 +3235,9 @@ mkSumOrTuplePat l boxity (Tuple ps) anns = do
   cs <- addAnnsAt (locA l) []
   return $ L l (PatBuilderPat (TuplePat (ApiAnn anns cs) ps' boxity))
   where
-    toTupPat :: Located (Maybe (LocatedA (PatBuilder GhcPs))) -> PV (LPat GhcPs)
+    toTupPat :: LocatedA (Maybe (LocatedA (PatBuilder GhcPs))) -> PV (LPat GhcPs)
     toTupPat (L l p) = case p of
-      Nothing -> addFatalError l (text "Tuple section in pattern context")
+      Nothing -> addFatalError (locA l) (text "Tuple section in pattern context")
       Just p' -> checkLPat p'
 
 -- Sum

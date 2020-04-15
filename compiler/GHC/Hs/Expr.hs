@@ -750,7 +750,7 @@ type instance XXPragE        (GhcPass _) = NoExtCon
 -- @(,a,)@ is represented by
 -- @ExplicitTuple [Missing ty1, Present a, Missing ty3]@
 -- Which in turn stands for @(\x:ty1 \y:ty2. (x,a,y))@
-type LHsTupArg id = Located (HsTupArg id)
+type LHsTupArg id = LocatedA (HsTupArg id)
 -- | - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnComma'
 
 -- For details on above see note [Api annotations] in ApiAnnotation
@@ -1826,10 +1826,10 @@ pp_rhs ctxt rhs = matchSeparator ctxt <+> pprDeeper (ppr rhs)
 -}
 
 -- | Located @do@ block Statement
-type LStmt id body = Located (StmtLR id id body)
+type LStmt id body = LocatedA (StmtLR id id body)
 
 -- | Located Statement with separate Left and Right id's
-type LStmtLR idL idR body = Located (StmtLR idL idR body)
+type LStmtLR idL idR body = LocatedA (StmtLR idL idR body)
 
 -- | @do@ block Statement
 type Stmt id body = StmtLR id id body
@@ -2345,7 +2345,7 @@ pprArg (ApplicativeArgMany _ stmts return pat) =
      text "<-" <+>
      ppr (HsDo (panic "pprStmt") DoExpr (noLoc
                (stmts ++
-                   [noLoc (LastStmt noExtField (noLocA return) Nothing noSyntaxExpr)])))
+                   [noLocA (LastStmt noExtField (noLocA return) Nothing noSyntaxExpr)])))
 
 pprArg (XApplicativeArg x) = ppr x
 
