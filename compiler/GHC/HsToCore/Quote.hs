@@ -1623,7 +1623,7 @@ repUpdFields = repListM fieldExpTyConName rep_fld
   where
     rep_fld :: LHsRecUpdField GhcRn -> MetaM (Core (M TH.FieldExp))
     rep_fld (L l fld) = case unLoc (hsRecFieldLbl fld) of
-      Unambiguous sel_name _ -> do { fn <- lookupLOcc (L (noAnnSrcSpan l) sel_name)
+      Unambiguous sel_name _ -> do { fn <- lookupLOcc (L l sel_name)
                                    ; e  <- repLE (hsRecFieldArg fld)
                                    ; repFieldExp fn e }
       Ambiguous{}            -> notHandled "Ambiguous record updates" (ppr fld)
@@ -1752,7 +1752,7 @@ rep_implicit_param_bind (L loc (IPBind _ ename (L _ rhs)))
                         panic "rep_implicit_param_bind: post typechecking"
       ; rhs' <- repE rhs
       ; ipb <- repImplicitParamBind name rhs'
-      ; return (loc, ipb) }
+      ; return (locA loc, ipb) }
 rep_implicit_param_bind (L _ (XIPBind nec)) = noExtCon nec
 
 rep_implicit_param_name :: HsIPName -> MetaM (Core String)

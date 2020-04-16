@@ -1005,9 +1005,9 @@ addTickHsRecordBinds (HsRecFields fields dd)
 
 addTickHsRecField :: LHsRecField' id (LHsExpr GhcTc)
                   -> TM (LHsRecField' id (LHsExpr GhcTc))
-addTickHsRecField (L l (HsRecField id expr pun))
+addTickHsRecField (L l (HsRecField x id expr pun))
         = do { expr' <- addTickLHsExpr expr
-             ; return (L l (HsRecField id expr' pun)) }
+             ; return (L l (HsRecField x id expr' pun)) }
 
 
 addTickArithSeqInfo :: ArithSeqInfo GhcTc -> TM (ArithSeqInfo GhcTc)

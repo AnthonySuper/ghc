@@ -331,7 +331,7 @@ tcLocalBinds (HsValBinds _ (ValBinds {})) _ = panic "tcLocalBinds"
 tcLocalBinds (HsIPBinds x (IPBinds _ ip_binds)) thing_inside
   = do  { ipClass <- tcLookupClass ipClassName
         ; (given_ips, ip_binds') <-
-            mapAndUnzipM (wrapLocSndM (tc_ip_bind ipClass)) ip_binds
+            mapAndUnzipM (wrapLocSndMA (tc_ip_bind ipClass)) ip_binds
 
         -- If the binding binds ?x = E, we  must now
         -- discharge any ?x constraints in expr_lie
@@ -352,7 +352,7 @@ tcLocalBinds (HsIPBinds x (IPBinds _ ip_binds)) thing_inside
             ; ip_id <- newDict ipClass [ p, ty ]
             ; expr' <- tcMonoExpr expr (mkCheckExpType ty)
             ; let d = toDict ipClass p ty `fmap` expr'
-            ; return (ip_id, (IPBind noExtField (Right ip_id) d)) }
+            ; return (ip_id, (IPBind noAnn (Right ip_id) d)) }
     tc_ip_bind _ (IPBind _ (Right {}) _) = panic "tc_ip_bind"
     tc_ip_bind _ (XIPBind nec) = noExtCon nec
 

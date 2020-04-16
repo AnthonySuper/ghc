@@ -41,6 +41,7 @@ import Lexer (AddApiAnn)
 import ApiAnnotation
 
 import Data.Kind
+import Binary
 
 {-
 Note [Trees that grow]
@@ -346,6 +347,18 @@ instance (Monoid a) => Monoid (ApiAnn' a) where
 instance (Outputable a) => Outputable (ApiAnn' a) where
   ppr (ApiAnn a c)  = text "ApiAnn" <+> ppr a <+> ppr c
   ppr ApiAnnNotUsed = text "ApiAnnNotUsed"
+
+
+instance Binary a => Binary (LocatedA a) where
+  -- We do not serialise the annotations
+    put_ bh (L l x) = do
+            put_ bh (locA l)
+            put_ bh x
+
+    get bh = do
+            l <- get bh
+            x <- get bh
+            return (L (noAnnSrcSpan l) x)
 
 
 data Pass = Parsed | Renamed | Typechecked

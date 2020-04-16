@@ -389,13 +389,13 @@ data HsRecFields p arg         -- A bunch of record fields
 --                     and the remainder being 'filled in' implicitly
 
 -- | Located Haskell Record Field
-type LHsRecField' p arg = Located (HsRecField' p arg)
+type LHsRecField' p arg = LocatedA (HsRecField' p arg)
 
 -- | Located Haskell Record Field
-type LHsRecField  p arg = Located (HsRecField  p arg)
+type LHsRecField  p arg = LocatedA (HsRecField  p arg)
 
 -- | Located Haskell Record Update Field
-type LHsRecUpdField p   = Located (HsRecUpdField p)
+type LHsRecUpdField p   = LocatedA (HsRecUpdField p)
 
 -- | Haskell Record Field
 type HsRecField    p arg = HsRecField' (FieldOcc p) arg
@@ -409,6 +409,7 @@ type HsRecUpdField p     = HsRecField' (AmbiguousFieldOcc p) (LHsExpr p)
 --
 -- For details on above see note [Api annotations] in ApiAnnotation
 data HsRecField' id arg = HsRecField {
+        hsRecFieldAnn :: ApiAnn,
         hsRecFieldLbl :: Located id,
         hsRecFieldArg :: arg,           -- ^ Filled in by renamer when punning
         hsRecPun      :: Bool           -- ^ Note [Punning]

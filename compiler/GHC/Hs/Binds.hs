@@ -826,7 +826,7 @@ isEmptyIPBindsTc (IPBinds ds is) = null is && isEmptyTcEvBinds ds
 isEmptyIPBindsTc (XHsIPBinds _) = True
 
 -- | Located Implicit Parameter Binding
-type LIPBind id = Located (IPBind id)
+type LIPBind id = LocatedA (IPBind id)
 -- ^ May have 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnSemi' when in a
 --   list
 
@@ -849,7 +849,7 @@ data IPBind id
         (LHsExpr id)
   | XIPBind (XXIPBind id)
 
-type instance XCIPBind    (GhcPass p) = NoExtField
+type instance XCIPBind    (GhcPass p) = ApiAnn
 type instance XXIPBind    (GhcPass p) = NoExtCon
 
 instance OutputableBndrId p

@@ -2024,7 +2024,7 @@ type instance XParStmt         (GhcPass _) GhcPs b = NoExtField
 type instance XParStmt         (GhcPass _) GhcRn b = NoExtField
 type instance XParStmt         (GhcPass _) GhcTc b = Type
 
-type instance XTransStmt       (GhcPass _) GhcPs b = NoExtField
+type instance XTransStmt       (GhcPass _) GhcPs b = ApiAnn
 type instance XTransStmt       (GhcPass _) GhcRn b = NoExtField
 type instance XTransStmt       (GhcPass _) GhcTc b = Type
 

@@ -3053,24 +3053,26 @@ flattenedpquals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
 
 pquals :: { Located [[LStmt GhcPs (LHsExpr GhcPs)]] }
     : squals '|' pquals
-                     {% addAnnotation (glA $ head $ unLoc $1) AnnVbar (gl $2) >>
-                        return (sLL $1 $> (reverse (unLoc $1) : unLoc $3)) }
--- AZ working above
-
+                     {% case unLoc $1 of
+                          (h:t) -> do
+                            h' <- addAnnotationA h AnnVbar (gl $2)
+                            return (sLL $1 $> (reverse (h':t) : unLoc $3)) }
     | squals         { L (getLoc $1) [reverse (unLoc $1)] }
 
 squals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }   -- In reverse order, because the last
                                         -- one can "grab" the earlier ones
     : squals ',' transformqual
-             {% addAnnotation (glA $ head $ unLoc $1) AnnComma (gl $2) >>
-                amsL (comb2 $1 $>) (fst $ unLoc $3) >>
-                return (sLL $1 $> [sLLa $1 $> ((snd $ unLoc $3) (reverse (unLoc $1)))]) }
+             {% case unLoc $1 of
+                  (h:t) -> do
+                    h' <- addAnnotationA h AnnComma (gl $2)
+                    return (sLL $1 $> [sLLa $1 $> ((unLoc $3) (reverse (h':t)))]) }
     | squals ',' qual
              {% runPV $3 >>= \ $3 ->
-                addAnnotation (glA $ head $ unLoc $1) AnnComma (gl $2) >>
-                return (sLL $1 (reLoc $>) ($3 : unLoc $1)) }
-    | transformqual        {% ams (\_ -> $1) (fst $ unLoc $1) >>
-                              return (sLL $1 $> [L (getLocAnn $1) ((snd $ unLoc $1) [])]) }
+                case unLoc $1 of
+                  (h:t) -> do
+                    h' <- addAnnotationA h AnnComma (gl $2)
+                    return (sLL $1 (reLoc $>) ($3 : (h':t))) }
+    | transformqual        {% return (sLL $1 $> [L (getLocAnn $1) ((unLoc $1) [])]) }
     | qual                               {% runPV $1 >>= \ $1 ->
                                             return $ sL1A $1 [$1] }
 --  | transformquals1 ',' '{|' pquals '|}'   { sLL $1 $> ($4 : unLoc $1) }
@@ -3081,24 +3083,25 @@ squals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }   -- In reverse order, becau
 -- consensus on the syntax, this feature is not being used until we
 -- get user demand.
 
-transformqual :: { Located ([AddApiAnn],[LStmt GhcPs (LHsExpr GhcPs)] -> Stmt GhcPs (LHsExpr GhcPs)) }
+transformqual :: { Located ([LStmt GhcPs (LHsExpr GhcPs)] -> Stmt GhcPs (LHsExpr GhcPs)) }
                         -- Function is applied to a list of stmts *in order*
-    : 'then' exp              {% runECP_P $2 >>= \ $2 -> return $
-                                 sLLlA $1 $> ([mj AnnThen $1], \ss -> (mkTransformStmt ss $2)) }
+    : 'then' exp              {% runECP_P $2 >>= \ $2 ->
+                                 acs (\cs->
+                                 sLLlA $1 $> (\ss -> (mkTransformStmt (ApiAnn [mj AnnThen $1] cs) ss $2))) }
     | 'then' exp 'by' exp     {% runECP_P $2 >>= \ $2 ->
                                  runECP_P $4 >>= \ $4 ->
-                                 return $ sLLlA $1 $> ([mj AnnThen $1,mj AnnBy $3],
-                                                     \ss -> (mkTransformByStmt ss $2 $4)) }
+                                 acs (\cs -> sLLlA $1 $> (
+                                                     \ss -> (mkTransformByStmt (ApiAnn [mj AnnThen $1,mj AnnBy $3] cs) ss $2 $4))) }
     | 'then' 'group' 'using' exp
             {% runECP_P $4 >>= \ $4 ->
-               return $ sLLlA $1 $> ([mj AnnThen $1,mj AnnGroup $2,mj AnnUsing $3],
-                                   \ss -> (mkGroupUsingStmt ss $4)) }
+               acs (\cs -> sLLlA $1 $> (
+                                   \ss -> (mkGroupUsingStmt (ApiAnn [mj AnnThen $1,mj AnnGroup $2,mj AnnUsing $3] cs) ss $4))) }
 
     | 'then' 'group' 'by' exp 'using' exp
             {% runECP_P $4 >>= \ $4 ->
                runECP_P $6 >>= \ $6 ->
-               return $ sLLlA $1 $> ([mj AnnThen $1,mj AnnGroup $2,mj AnnBy $3,mj AnnUsing $5],
-                                   \ss -> (mkGroupByUsingStmt ss $4 $6)) }
+               acs (\cs -> sLLlA $1 $> (
+                                   \ss -> (mkGroupByUsingStmt (ApiAnn [mj AnnThen $1,mj AnnGroup $2,mj AnnBy $3,mj AnnUsing $5] cs) ss $4 $6))) }
 
 -- Note that 'group' is a special_id, which means that you can enable
 -- TransformListComp while still using Data.List.group. However, this
@@ -3113,9 +3116,10 @@ guardquals :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
 
 guardquals1 :: { Located [LStmt GhcPs (LHsExpr GhcPs)] }
     : guardquals1 ',' qual  {% runPV $3 >>= \ $3 ->
-                               addAnnotation (glA $ head $ unLoc $1) AnnComma
-                                             (gl $2) >>
-                               return (sLL $1 (reLoc $>) ($3 : unLoc $1)) }
+                               case unLoc $1 of
+                                 (h:t) -> do
+                                   h' <- addAnnotationA h AnnComma (gl $2)
+                                   return (sLL $1 (reLoc $>) ($3 : (h':t))) }
     | qual                  {% runPV $1 >>= \ $1 ->
                                return $ sL1A $1 [$1] }
 
@@ -3287,43 +3291,48 @@ fbinds  :: { forall b. DisambECP b => PV ([AddApiAnn],([LHsRecField GhcPs (Locat
 fbinds1 :: { forall b. DisambECP b => PV ([AddApiAnn],([LHsRecField GhcPs (LocatedA b)], Maybe SrcSpan)) }
         : fbind ',' fbinds1
                  { $1 >>= \ $1 ->
-                   $3 >>= \ $3 ->
-                   addAnnotation (gl $1) AnnComma (gl $2) >>
-                   return (case $3 of (ma,(flds, dd)) -> (ma,($1 : flds, dd))) }
+                   $3 >>= \ $3 -> do
+                   h <- addAnnotationA $1 AnnComma (gl $2)
+                   return (case $3 of (ma,(flds, dd)) -> (ma,(h : flds, dd))) }
         | fbind                         { $1 >>= \ $1 ->
                                           return ([],([$1], Nothing)) }
         | '..'                          { return ([mj AnnDotdot $1],([],   Just (getLoc $1))) }
 
 fbind   :: { forall b. DisambECP b => PV (LHsRecField GhcPs (LocatedA b)) }
         : qvar '=' texp  { runECP_PV $3 >>= \ $3 ->
-                           ams  (\_ -> sLLlA (reLoc $1) $> $ HsRecField (sL1A $1 $ mkFieldOcc $1) $3 False)
-                                [mj AnnEqual $2] }
+                           acsA (\cs -> sLLlA (reLoc $1) $> $ HsRecField (ApiAnn [mj AnnEqual $2] cs) (sL1A $1 $ mkFieldOcc $1) $3 False) }
                         -- RHS is a 'texp', allowing view patterns (#6038)
                         -- and, incidentally, sections.  Eg
                         -- f (R { x = show -> s }) = ...
 
         | qvar          { placeHolderPunRhs >>= \rhs ->
-                          return $ sL1A $1 $ HsRecField (sL1A $1 $ mkFieldOcc $1) rhs True }
+                          acsa (\cs -> sL1 $1 $ HsRecField (ApiAnn [] cs) (sL1A $1 $ mkFieldOcc $1) rhs True) }
                         -- In the punning case, use a place-holder
                         -- The renamer fills in the final value
 
 -----------------------------------------------------------------------------
 -- Implicit Parameter Bindings
 
-dbinds  :: { Located [LIPBind GhcPs] }
+dbinds  :: { Located [LIPBind GhcPs] } -- reversed
         : dbinds ';' dbind
-                      {% addAnnotation (gl $ last $ unLoc $1) AnnSemi (gl $2) >>
-                         return (let { this = $3; rest = unLoc $1 }
-                              in rest `seq` this `seq` sLL $1 $> (this : rest)) }
-        | dbinds ';'  {% addAnnotation (gl $ last $ unLoc $1) AnnSemi (gl $2) >>
-                         return (sLL $1 $> (unLoc $1)) }
-        | dbind                        { let this = $1 in this `seq` sL1 $1 [this] }
+                      -- {% addAnnotation (gl $ last $ unLoc $1) AnnSemi (gl $2) >>
+                      --    return (let { this = $3; rest = unLoc $1 }
+                      --         in rest `seq` this `seq` sLL $1 $> (this : rest)) }
+                      {% case unLoc $1 of
+                           (h:t) -> do
+                             h' <- addAnnotationA h AnnSemi (gl $2)
+                             return (let { this = $3; rest = h':t }
+                                in rest `seq` this `seq` sLL $1 (reLoc $>) (this : rest)) }
+        | dbinds ';'  {% case unLoc $1 of
+                           (h:t) -> do
+                             h' <- addAnnotationA h AnnSemi (gl $2)
+                             return (sLL $1 $> (h':t)) }
+        | dbind                        { let this = $1 in this `seq` (sL1 (reLoc $1) [this]) }
 --      | {- empty -}                  { [] }
 
 dbind   :: { LIPBind GhcPs }
 dbind   : ipvar '=' exp                {% runECP_P $3 >>= \ $3 ->
-                                          ams (\_ -> sLLlA $1 $> (IPBind noExtField (Left $1) $3))
-                                              [mj AnnEqual $2] }
+                                          acsA (\cs -> sLLlA $1 $> (IPBind (ApiAnn [mj AnnEqual $2] cs) (Left $1) $3)) }
 
 ipvar   :: { Located HsIPName }
         : IPDUPVARID            { sL1 $1 (HsIPName (getIPDUPVARID $1)) }
@@ -3339,31 +3348,32 @@ overloaded_label :: { Located FastString }
 
 name_boolformula_opt :: { LBooleanFormula (LocatedA RdrName) }
         : name_boolformula          { $1 }
-        | {- empty -}               { noLoc mkTrue }
+        | {- empty -}               { noLocA mkTrue }
 
 name_boolformula :: { LBooleanFormula (LocatedA RdrName) }
         : name_boolformula_and                      { $1 }
         | name_boolformula_and '|' name_boolformula
-                           {% aa $1 (AnnVbar, $2)
-                              >> return (sLL $1 $> (Or [$1,$3])) }
+                           {% do { h <- addAnnotationA $1 AnnVbar (gl $2)
+                                 ; return (reLocA $ sLLAA $1 $> (Or [h,$3])) } }
 
 name_boolformula_and :: { LBooleanFormula (LocatedA RdrName) }
         : name_boolformula_and_list
-                  { sLL (head $1) (last $1) (And ($1)) }
+                  { reLocA $ sLLAA (head $1) (last $1) (And ($1)) }
 
 name_boolformula_and_list :: { [LBooleanFormula (LocatedA RdrName)] }
         : name_boolformula_atom                               { [$1] }
         | name_boolformula_atom ',' name_boolformula_and_list
-            {% aa $1 (AnnComma, $2) >> return ($1 : $3) }
+            {% do { h <- addAnnotationA $1 AnnComma (gl $2)
+                  ; return (h : $3) } }
 
 name_boolformula_atom :: { LBooleanFormula (LocatedA RdrName) }
-        : '(' name_boolformula ')'  {% ams (\_ -> sLL $1 $> (Parens $2)) [mop $1,mcp $3] }
-        | name_var                  { sL1A $1 (Var $1) }
+        : '(' name_boolformula ')'  {% amsr (sLL $1 $> (Parens $2)) [mop $1,mcp $3] }
+        | name_var                  { reLocA $ sL1A $1 (Var $1) }
 
 namelist :: { Located [LocatedA RdrName] }
 namelist : name_var              { sL1A $1 [$1] }
-         | name_var ',' namelist {% addAnnotation (glA $1) AnnComma (gl $2) >>
-                                    return (sLL (reLoc $1) $> ($1 : unLoc $3)) }
+         | name_var ',' namelist {% do { h <- addAnnotationA $1 AnnComma (gl $2)
+                                       ; return (sLL (reLoc $1) $> (h : unLoc $3)) }}
 
 name_var :: { LocatedA RdrName }
 name_var : var { $1 }
@@ -3395,8 +3405,8 @@ con     :: { LocatedA RdrName }
 
 con_list :: { Located [LocatedA RdrName] }
 con_list : con                  { sL1A $1 [$1] }
-         | con ',' con_list     {% addAnnotation (glA $1) AnnComma (gl $2) >>
-                                   return (sLL (reLoc $1) $> ($1 : unLoc $3)) }
+         | con ',' con_list     {% do { h <- addAnnotationA $1 AnnComma (gl $2)
+                                      ; return (sLL (reLoc $1) $> (h : unLoc $3)) }}
 
 -- See Note [ExplicitTuple] in GHC.Hs.Expr
 sysdcon_nolist :: { LocatedA DataCon }  -- Wired in data constructors
@@ -3548,11 +3558,9 @@ qopm    :: { forall b. DisambInfixOp b => PV (LocatedA b) }   -- used in section
         | hole_op               { pvA $1 }
 
 hole_op :: { forall b. DisambInfixOp b => PV (Located b) }   -- used in sections
-hole_op : '`' '_' '`'           { amms (mkHsInfixHolePV (comb2 $1 $>)
-                                         (ApiAnn [mj AnnBackquote $1,mj AnnVal $2
-                                                 ,mj AnnBackquote $3] noCom))
+hole_op : '`' '_' '`'           { mkHsInfixHolePV (comb2 $1 $>)
                                          [mj AnnBackquote $1,mj AnnVal $2
-                                         ,mj AnnBackquote $3] }
+                                                 ,mj AnnBackquote $3] }
 
 qvarop :: { LocatedA RdrName }
         : qvarsym               { $1 }

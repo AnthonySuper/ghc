@@ -1812,14 +1812,14 @@ ecpFromCmd a = ECP (ecpFromCmd' a)
 class DisambInfixOp b where
   mkHsVarOpPV :: LocatedA RdrName -> PV (LocatedA b)
   mkHsConOpPV :: LocatedA RdrName -> PV (LocatedA b)
-  mkHsInfixHolePV :: SrcSpan -> ApiAnn -> PV (Located b)
+  mkHsInfixHolePV :: SrcSpan -> [AddApiAnn] -> PV (Located b)
 
 instance DisambInfixOp (HsExpr GhcPs) where
   mkHsVarOpPV v = return $ L (getLoc v) (HsVar noExtField v)
   mkHsConOpPV v = return $ L (getLoc v) (HsVar noExtField v)
   mkHsInfixHolePV l ann = do
-    cs <- addAnnsAt l (anns ann)
-    return $ L l (hsHoleExpr (addAnns ann [] cs))
+    cs <- addAnnsAt l []
+    return $ L l (hsHoleExpr (ApiAnn ann cs))
 
 instance DisambInfixOp RdrName where
   mkHsConOpPV (L l v) = return $ L l v
@@ -2703,9 +2703,9 @@ mk_rec_fields fs (Just s)  = HsRecFields { rec_flds = fs
                                      , rec_dotdot = Just (L s (length fs)) }
 
 mk_rec_upd_field :: HsRecField GhcPs (LHsExpr GhcPs) -> HsRecUpdField GhcPs
-mk_rec_upd_field (HsRecField (L loc (FieldOcc _ rdr)) arg pun)
-  = HsRecField (L loc (Unambiguous noExtField rdr)) arg pun
-mk_rec_upd_field (HsRecField (L _ (XFieldOcc nec)) _ _)
+mk_rec_upd_field (HsRecField noAnn (L loc (FieldOcc _ rdr)) arg pun)
+  = HsRecField noAnn (L loc (Unambiguous noExtField rdr)) arg pun
+mk_rec_upd_field (HsRecField _ (L _ (XFieldOcc nec)) _ _)
   = noExtCon nec
 
 mkInlinePragma :: SourceText -> (InlineSpec, RuleMatchInfo) -> Maybe Activation

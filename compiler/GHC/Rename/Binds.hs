@@ -223,14 +223,14 @@ rnLocalBindsAndThen (XHsLocalBindsLR nec) _ = noExtCon nec
 
 rnIPBinds :: HsIPBinds GhcPs -> RnM (HsIPBinds GhcRn, FreeVars)
 rnIPBinds (IPBinds _ ip_binds ) = do
-    (ip_binds', fvs_s) <- mapAndUnzipM (wrapLocFstM rnIPBind) ip_binds
+    (ip_binds', fvs_s) <- mapAndUnzipM (wrapLocFstMA rnIPBind) ip_binds
     return (IPBinds noExtField ip_binds', plusFVs fvs_s)
 rnIPBinds (XHsIPBinds nec) = noExtCon nec
 
 rnIPBind :: IPBind GhcPs -> RnM (IPBind GhcRn, FreeVars)
 rnIPBind (IPBind _ ~(Left n) expr) = do
     (expr',fvExpr) <- rnLExpr expr
-    return (IPBind noExtField (Left n) expr', fvExpr)
+    return (IPBind noAnn (Left n) expr', fvExpr)
 rnIPBind (XIPBind nec) = noExtCon nec
 
 {-

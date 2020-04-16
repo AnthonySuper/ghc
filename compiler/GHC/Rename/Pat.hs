@@ -637,10 +637,11 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
                                                          (mk_arg loc arg_rdr)) }
                      else return arg
            ; return (L l (HsRecField
-                             { hsRecFieldLbl = (L loc (FieldOcc sel (L ll lbl)))
+                             { hsRecFieldAnn = noAnn
+                             , hsRecFieldLbl = (L loc (FieldOcc sel (L ll lbl)))
                              , hsRecFieldArg = arg'
                              , hsRecPun      = pun })) }
-    rn_fld _ _ (L _ (HsRecField (L _ (XFieldOcc _)) _ _))
+    rn_fld _ _ (L _ (HsRecField _ (L _ (XFieldOcc _)) _ _))
       = panic "rnHsRecFields"
 
 
@@ -681,10 +682,12 @@ rnHsRecFields ctxt mk_arg (HsRecFields { rec_flds = flds, rec_dotdot = dotdot })
                                     _other           -> True ]
 
            ; addUsedGREs dot_dot_gres
-           ; return [ L loc (HsRecField
-                        { hsRecFieldLbl
-                           = L loc (FieldOcc sel (L (noAnnSrcSpan loc) arg_rdr))
-                        , hsRecFieldArg = L (noAnnSrcSpan loc) (mk_arg loc arg_rdr)
+           ; let loc' = noAnnSrcSpan loc
+           ; return [ L loc' (HsRecField
+                        { hsRecFieldAnn = noAnn
+                        , hsRecFieldLbl
+                           = L loc (FieldOcc sel (L loc' arg_rdr))
+                        , hsRecFieldArg = L loc' (mk_arg loc arg_rdr)
                         , hsRecPun      = False })
                     | fl <- dot_dot_fields
                     , let sel     = flSelector fl
@@ -767,7 +770,8 @@ rnHsRecUpdFields flds
                           Right _ -> L loc (Ambiguous   noExtField
                                             (L (noAnnSrcSpan loc) lbl))
 
-           ; return (L l (HsRecField { hsRecFieldLbl = lbl'
+           ; return (L l (HsRecField { hsRecFieldAnn = noAnn
+                                     , hsRecFieldLbl = lbl'
                                      , hsRecFieldArg = arg''
                                      , hsRecPun      = pun }), fvs') }
 

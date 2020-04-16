@@ -509,7 +509,7 @@ zonkLocalBinds env (HsValBinds x (XValBindsLR (NValBinds binds sigs)))
            ; return (env2, (r,b'):bs') }
 
 zonkLocalBinds env (HsIPBinds x (IPBinds dict_binds binds )) = do
-    new_binds <- mapM (wrapLocM zonk_ip_bind) binds
+    new_binds <- mapM (wrapLocMA zonk_ip_bind) binds
     let
         env1 = extendIdZonkEnvRec env
                  [ n | (L _ (IPBind _ (Right n) _)) <- new_binds]

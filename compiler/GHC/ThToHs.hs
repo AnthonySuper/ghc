@@ -880,7 +880,7 @@ cvtImplicitParamBind :: String -> TH.Exp -> CvtM (LIPBind GhcPs)
 cvtImplicitParamBind n e = do
     n' <- wrapL (ipName n)
     e' <- cvtl e
-    returnL (IPBind noExtField (Left n') e')
+    returnLA (IPBind noAnn (Left n') e')
 
 -------------------------------------------------------------------
 --              Expressions
@@ -1059,9 +1059,10 @@ cvtFld :: (RdrName -> t) -> (TH.Name, TH.Exp)
        -> CvtM (LHsRecField' t (LHsExpr GhcPs))
 cvtFld f (v,e)
   = do  { v' <- vNameL v; e' <- cvtl e
-        ; return (noLoc $ HsRecField { hsRecFieldLbl = fmap f (reLoc v')
-                                     , hsRecFieldArg = e'
-                                     , hsRecPun      = False}) }
+        ; return (noLocA $ HsRecField { hsRecFieldAnn = noAnn
+                                      , hsRecFieldLbl = fmap f (reLoc v')
+                                      , hsRecFieldArg = e'
+                                      , hsRecPun      = False}) }
 
 cvtDD :: Range -> CvtM (ArithSeqInfo GhcPs)
 cvtDD (FromR x)           = do { x' <- cvtl x; return $ From x' }
@@ -1319,10 +1320,11 @@ cvtPatFld :: (TH.Name, TH.Pat) -> CvtM (LHsRecField GhcPs (LPat GhcPs))
 cvtPatFld (s,p)
   = do  { L ls s' <- vNameL s
         ; p' <- cvtPat p
-        ; return (noLoc $ HsRecField { hsRecFieldLbl
+        ; return (noLocA $ HsRecField { hsRecFieldAnn = noAnn
+                                      , hsRecFieldLbl
                                          = L (locA ls) $ mkFieldOcc (L ls s')
-                                     , hsRecFieldArg = p'
-                                     , hsRecPun      = False}) }
+                                      , hsRecFieldArg = p'
+                                      , hsRecPun      = False}) }
 
 {- | @cvtOpAppP x op y@ converts @op@ and @y@ and produces the operator application @x `op` y@.
 The produced tree of infix patterns will be left-biased, provided @x@ is.

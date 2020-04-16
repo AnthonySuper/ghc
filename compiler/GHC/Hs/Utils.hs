@@ -308,27 +308,27 @@ mkNPat lit neg     = NPat noExtField lit neg noSyntaxExpr
 mkNPlusKPat id lit anns
   = NPlusKPat anns id lit (unLoc lit) noSyntaxExpr noSyntaxExpr
 
-mkTransformStmt    :: [ExprLStmt GhcPs] -> LHsExpr GhcPs
+mkTransformStmt    :: ApiAnn -> [ExprLStmt GhcPs] -> LHsExpr GhcPs
                    -> StmtLR GhcPs GhcPs (LHsExpr GhcPs)
-mkTransformByStmt  :: [ExprLStmt GhcPs] -> LHsExpr GhcPs
+mkTransformByStmt  :: ApiAnn -> [ExprLStmt GhcPs] -> LHsExpr GhcPs
                    -> LHsExpr GhcPs -> StmtLR GhcPs GhcPs (LHsExpr GhcPs)
-mkGroupUsingStmt   :: [ExprLStmt GhcPs] -> LHsExpr GhcPs
+mkGroupUsingStmt   :: ApiAnn -> [ExprLStmt GhcPs] -> LHsExpr GhcPs
                    -> StmtLR GhcPs GhcPs (LHsExpr GhcPs)
-mkGroupByUsingStmt :: [ExprLStmt GhcPs] -> LHsExpr GhcPs
+mkGroupByUsingStmt :: ApiAnn -> [ExprLStmt GhcPs] -> LHsExpr GhcPs
                    -> LHsExpr GhcPs
                    -> StmtLR GhcPs GhcPs (LHsExpr GhcPs)
 
-emptyTransStmt :: StmtLR GhcPs GhcPs (LHsExpr GhcPs)
-emptyTransStmt = TransStmt { trS_ext = noExtField
-                           , trS_form = panic "emptyTransStmt: form"
-                           , trS_stmts = [], trS_bndrs = []
-                           , trS_by = Nothing, trS_using = noLocA noExpr
-                           , trS_ret = noSyntaxExpr, trS_bind = noSyntaxExpr
-                           , trS_fmap = noExpr }
-mkTransformStmt    ss u   = emptyTransStmt { trS_form = ThenForm,  trS_stmts = ss, trS_using = u }
-mkTransformByStmt  ss u b = emptyTransStmt { trS_form = ThenForm,  trS_stmts = ss, trS_using = u, trS_by = Just b }
-mkGroupUsingStmt   ss u   = emptyTransStmt { trS_form = GroupForm, trS_stmts = ss, trS_using = u }
-mkGroupByUsingStmt ss b u = emptyTransStmt { trS_form = GroupForm, trS_stmts = ss, trS_using = u, trS_by = Just b }
+emptyTransStmt :: ApiAnn -> StmtLR GhcPs GhcPs (LHsExpr GhcPs)
+emptyTransStmt anns = TransStmt { trS_ext = anns
+                                , trS_form = panic "emptyTransStmt: form"
+                                , trS_stmts = [], trS_bndrs = []
+                                , trS_by = Nothing, trS_using = noLocA noExpr
+                                , trS_ret = noSyntaxExpr, trS_bind = noSyntaxExpr
+                                , trS_fmap = noExpr }
+mkTransformStmt    a ss u   = (emptyTransStmt a) { trS_form = ThenForm,  trS_stmts = ss, trS_using = u }
+mkTransformByStmt  a ss u b = (emptyTransStmt a) { trS_form = ThenForm,  trS_stmts = ss, trS_using = u, trS_by = Just b }
+mkGroupUsingStmt   a ss u   = (emptyTransStmt a) { trS_form = GroupForm, trS_stmts = ss, trS_using = u }
+mkGroupByUsingStmt a ss b u = (emptyTransStmt a) { trS_form = GroupForm, trS_stmts = ss, trS_using = u, trS_by = Just b }
 
 mkLastStmt body = LastStmt noExtField body Nothing noSyntaxExpr
 mkBodyStmt body

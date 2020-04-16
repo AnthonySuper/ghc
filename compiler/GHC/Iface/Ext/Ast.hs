@@ -870,9 +870,11 @@ instance ( a ~ GhcPass p
       contextify (RecCon r) = RecCon $ RC RecFieldMatch $ contextify_rec r
       contextify_rec (HsRecFields fds a) = HsRecFields (map go scoped_fds) a
         where
-          go (RS fscope (L spn (HsRecField lbl pat pun))) =
-            L spn $ HsRecField lbl (PS rsp scope fscope pat) pun
-          scoped_fds = listScopes pscope fds
+          go :: RScoped (GenLocated SrcSpanAnn (HsRecField' id a1))
+                      -> GenLocated SrcSpanAnn (HsRecField' id (PScoped a1)) -- AZ
+          go (RS fscope (L spn (HsRecField x lbl pat pun))) =
+            L spn $ HsRecField x lbl (PS rsp scope fscope pat) pun
+          scoped_fds = listScopesA pscope fds
 
 instance ( ToHie body
          , ToHie (LGRHS a body)
@@ -1151,8 +1153,8 @@ instance ( ToHie (RFContext (Located label))
          , Data label
          , Data arg
          ) => ToHie (RContext (LHsRecField' label arg)) where
-  toHie (RC c (L span recfld)) = concatM $ makeNode recfld span : case recfld of
-    HsRecField label expr _ ->
+  toHie (RC c (L span recfld)) = concatM $ makeNode recfld (locA span) : case recfld of
+    HsRecField _ label expr _ ->
       [ toHie $ RFC c (getRealSpan $ loc expr) label
       , toHie expr
       ]
@@ -1701,7 +1703,7 @@ instance ToHie PendingTcSplice where
   toHie _ = pure []
 
 instance ToHie (LBooleanFormula (LocatedA Name)) where
-  toHie (L span form) = concatM $ makeNode form span : case form of
+  toHie (L span form) = concatM $ makeNode form (locA span) : case form of
       Var a ->
         [ toHie $ C Use a
         ]
