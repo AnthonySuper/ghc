@@ -23,16 +23,20 @@ instance (Deferrable c1, Deferrable c2) => Deferrable (c1,c2) where
 
 {- Notes Apr 2020.
 ~~~~~~~~~~~~~~~~~
-Wow, this is horrible! If you say
+Note the careful type for deferPair!  You can also say
 
 deferPair :: (Deferrable c1, Deferrable c2, d ~ (c1,c2))
           => Proxy (c1,c2) -> (d => a) -> a
-then it all works.  The point is that
+
+but NOT
+
+deferPair :: (Deferrable c1, Deferrable c2)
+          => Proxy (c1,c2) -> ((c1,c2) => a) -> a
+
+The point is that
   (c1,c2) => a
 is short for
   c1 => c2 => a
-and we have no source language notation for the form that takes
-a single constraint tuple.
 -}
 
 {-

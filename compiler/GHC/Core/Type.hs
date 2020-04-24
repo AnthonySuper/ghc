@@ -1873,12 +1873,17 @@ isTauTy (CoercionTy _)        = False  -- Not sure about this
 
 isAtomicTy :: Type -> Bool
 -- True if the type is just a single token, and can be printed compactly
-isAtomicTy (TyVarTy {})             = True
-isAtomicTy (LitTy {})               = True
-isAtomicTy (TyConApp _ [])          = True
-isAtomicTy ty | isLiftedTypeKind ty = True  -- Type prints compactly as *
-isAtomicTy _                        = False
+-- Used when deciding how to lay out type error messages; see the
+-- call in GHC.Tc.Errors
+isAtomicTy (TyVarTy {})    = True
+isAtomicTy (LitTy {})      = True
+isAtomicTy (TyConApp _ []) = True
 
+isAtomicTy ty | isLiftedTypeKind ty = True
+   -- 'Type' prints compactly as *
+   -- See GHC.Iface.Type.ppr_kind_type
+
+isAtomicTy _ = False
 
 {-
 %************************************************************************

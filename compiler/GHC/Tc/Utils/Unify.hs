@@ -163,7 +163,7 @@ matchExpectedFunTys herald ctx arity orig_ty thing_inside
                                                go acc_arg_tys n ty'
            ; return (wrap_gen <.> wrap_res, result) }
 
-    -- No more args; do thisbefore tcView, so
+    -- No more args; do this /before/ tcView, so
     -- that we do not unnecessarily unwrap synonyms
     go acc_arg_tys 0 rho_ty
       = do { result <- thing_inside (reverse acc_arg_tys) (mkCheckExpType rho_ty)

@@ -336,7 +336,7 @@ tcHsSigType ctxt sig_ty
        ; (implic, ty) <- tc_hs_sig_type skol_info sig_ty  (expectedKindInCtxt ctxt)
 
        -- Spit out the implication (and perhpas fail fast)
-       -- See Note [Kind-checking type signatures] in GHC.Tc.Solver
+       -- See Note [Failure in local type signatures] in GHC.Tc.Solver
        ; emitFlatConstraints (mkImplicWC (unitBag implic))
 
        ; ty <- zonkTcType ty
@@ -378,6 +378,7 @@ tc_hs_sig_type skol_info hs_sig_type ctxt_kind
        ; kvs <- kindGeneralizeSome should_gen ty1
 
        -- Build an implication for any as-yet-unsolved kind equalities
+       -- See Note [Skolem escape in type signatures]
        ; implic <- buildTvImplication skol_info (kvs ++ spec_tkvs) tc_lvl wanted
 
        ; return (implic, mkInvForAllTys kvs ty1) }
@@ -388,21 +389,28 @@ tcHsSigType is tricky.  Consider (T11142)
   foo :: forall b. (forall k (a :: k). SameKind a b) -> ()
 This is ill-kinded becuase of a nested skolem-escape.
 
-That will show up as an un-solvable constraint in the implicaiton
-returned by buildTvImplication in tc_hs_sig_type.
+That will show up as an un-solvable constraint in the implication
+returned by buildTvImplication in tc_hs_sig_type.  See Note [Skolem
+escape prevention] in GHC.Tc.Utils.TcType for why it is unsolvable
+(the unification variable for b's kind is untouchable).
 
 Then, in GHC.Tc.Solver.emitFlatConstraints (called from tcHsSigType)
 we'll try to float out the constraint, be unable to do so, and fail.
-See GHC.Tc.Solver Note [Failure in local type signatures].
+See GHC.Tc.Solver Note [Failure in local type signatures] for more
+detail on this.
 
 The separation between tcHsSigType and tc_hs_sig_type is because
 tcClassSigType wants to use the latter, but *not* fail fast, because
-there are skolems from the class decl which are in scope; but its fine
+there are skolems from the class decl which are in scope; but it's fine
 not to because tcClassDecl1 has a solveEqualities wrapped around all
 the tcClassSigType calls.
 
 That's why tcHsSigType does emitFlatConstraints (which fails fast) but
 tcClassSigType just does emitImplication (which does not).  Ugh.
+
+c.f. see also Note [Skolem escape and forall-types]. The difference
+is that we don't need ot simplify at a forall type, only at the
+top level of a signature.
 -}
 
 -- Does validity checking and zonking.
@@ -411,7 +419,7 @@ tcStandaloneKindSig (L _ kisig) = case kisig of
   StandaloneKindSig _ (L _ name) ksig ->
     let ctxt = StandaloneKindSigCtxt name in
     addSigCtxt ctxt (hsSigType ksig) $
-    do { mode <- mkMode KindLevel
+    do { mode <- mkTcTyMode KindLevel
        ; kind <- tc_top_lhs_type mode ksig (expectedKindInCtxt ctxt)
        ; checkValidType ctxt kind
        ; return (name, kind) }
@@ -419,7 +427,7 @@ tcStandaloneKindSig (L _ kisig) = case kisig of
 
 tcTopLHsType :: LHsSigType GhcRn -> ContextKind -> TcM Type
 tcTopLHsType hs_ty ctxt_kind
-  = do { mode <- mkMode TypeLevel
+  = do { mode <- mkTcTyMode TypeLevel
        ; tc_top_lhs_type mode hs_ty ctxt_kind }
 
 tc_top_lhs_type :: TcTyMode -> LHsSigType GhcRn -> ContextKind -> TcM Type
@@ -514,15 +522,14 @@ tcHsTypeApp :: LHsWcType GhcRn -> Kind -> TcM Type
 -- See Note [Recipe for checking a signature] in GHC.Tc.Gen.HsType
 tcHsTypeApp wc_ty kind
   | HsWC { hswc_ext = sig_wcs, hswc_body = hs_ty } <- wc_ty
-  = do { mode <- mkMode TypeLevel
-       ; let mode' = mode { mode_holes = HM_VTA }
-                     -- See Note [Wildcards in visible type application]
+  = do { mode <- mkMode TypeLevel HM_VTA
+                 -- HM_VTA: See Note [Wildcards in visible type application]
        ; ty <- addTypeCtxt hs_ty                  $
                solveLocalEqualities "tcHsTypeApp" $
                -- We are looking at a user-written type, very like a
                -- signature so we want to solve its equalities right now
                tcNamedWildCardBinders sig_wcs $ \ _ ->
-               tc_lhs_type mode' hs_ty kind
+               tc_lhs_type mode hs_ty kind
 
        -- We do not kind-generalize type applications: we just
        -- instantiate with exactly what the user says.
@@ -577,13 +584,11 @@ tcFamTyPats fam_tc hs_pats
   = do { traceTc "tcFamTyPats {" $
          vcat [ ppr fam_tc, text "arity:" <+> ppr fam_arity ]
 
-
-       ; mode <- mkMode TypeLevel
+       ; mode <- mkMode TypeLevel HM_FamPat
+                 -- HM_FamPat: See Note [Wildcards in family instances] in
+                 -- GHC.Rename.Module
        ; let fun_ty = mkTyConApp fam_tc []
-             mode'  = mode { mode_holes = HM_FamPat }
-                      -- See Note [Wildcards in family instances] in
-                      -- GHC.Rename.Module
-       ; (fam_app, res_kind) <- tcInferTyApps mode' lhs_fun fun_ty hs_pats
+       ; (fam_app, res_kind) <- tcInferTyApps mode lhs_fun fun_ty hs_pats
 
        ; traceTc "End tcFamTyPats }" $
          vcat [ ppr fam_tc, text "res_kind:" <+> ppr res_kind ]
@@ -624,7 +629,7 @@ tcCheckLHsType hs_ty exp_kind
 tcInferLHsType :: LHsType GhcRn -> TcM (TcType, TcKind)
 -- Called from outside: set the context
 tcInferLHsType hs_ty = addTypeCtxt hs_ty $
-                       do { mode <- mkMode TypeLevel
+                       do { mode <- mkTcTyMode TypeLevel
                           ; tc_infer_lhs_type mode hs_ty }
 
 -- Like tcInferLHsType, but use it in a context where type synonyms and type families
@@ -633,7 +638,7 @@ tcInferLHsTypeUnsaturated :: LHsType GhcRn -> TcM (TcType, TcKind)
 tcInferLHsTypeUnsaturated hs_ty
   | Just (hs_fun_ty, hs_args) <- splitHsAppTys (unLoc hs_ty)
   = addTypeCtxt hs_ty $
-    do { mode <- mkMode TypeLevel
+    do { mode <- mkTcTyMode TypeLevel
        ; (fun_ty, _ki) <- tcInferAppHead mode hs_fun_ty
        ; tcInferTyApps_nosat mode hs_fun_ty fun_ty hs_args }
          -- Notice the 'nosat'; do not instantiate trailing
@@ -687,30 +692,49 @@ concern things that the renamer can't handle.
 --
 -- This data type is purely local, not exported from this module
 data TcTyMode
-  = TcTyMode { mode_tyki:: TypeOrKind
+  = TcTyMode { mode_tyki :: TypeOrKind
 
-             -- See Note [Level for anonymous wildcards]
+             -- See Note [Levels for wildcards]
              , mode_lvl   :: TcLevel
              , mode_holes :: HoleMode
-                 -- True <=> emit a hole constraints for an
-                 --          anonymous wildcard
     }
 
-data HoleMode = HM_Sig      -- Type signatures:  f :: _ -> Int
+-- HoleMode says how to treat the occurrences
+-- of anonymous wildcards; see tcAnonWildCardOcc
+data HoleMode = HM_NoHoles  -- No wildcard expected
+              | HM_Sig      -- Partial type signatures: f :: _ -> Int
               | HM_FamPat   -- Family instances: F _ Int = Bool
               | HM_VTA      -- Visible type and kind application:
                             --   f @(Maybe _)
                             --   Maybe @(_ -> _)
 
-mkMode :: TypeOrKind -> TcM TcTyMode
-mkMode tyki
+holesOK :: HoleMode -> Bool
+-- True <=> it's ok to encounter a hole
+-- Should have been checked by the renamer
+holesOK HM_NoHoles = False
+holesOK _          = True
+
+mkTcTyMode :: TypeOrKind -> TcM TcTyMode
+mkTcTyMode tyki = mkMode tyki HM_NoHoles
+
+mkMode :: TypeOrKind -> HoleMode -> TcM TcTyMode
+mkMode tyki hm
   = do { lvl <- getTcLevel
        ; return (TcTyMode { mode_tyki  = tyki
                           , mode_lvl   = lvl
-                          , mode_holes = HM_Sig }) }
+                          , mode_holes = hm }) }
+
+instance Outputable HoleMode where
+  ppr HM_NoHoles = text "HM_NoHoles"
+  ppr HM_Sig     = text "HM_Sig"
+  ppr HM_FamPat  = text "HM_FamPat"
+  ppr HM_VTA     = text "HM_VTA"
 
 instance Outputable TcTyMode where
-  ppr = ppr . mode_tyki
+  ppr (TcTyMode { mode_tyki = tyki, mode_lvl = lvl, mode_holes = hm })
+    = text "TcTyMode" <+> braces (sep [ ppr tyki <> comma
+                                      , ppr hm <> comma
+                                      , text "lvl:"  <> ppr lvl ])
 
 {-
 Note [Bidirectional type checking]
@@ -826,7 +850,7 @@ tc_infer_hs_type mode other_ty
 ------------------------------------------
 tcLHsType :: LHsType GhcRn -> TcKind -> TcM TcType
 tcLHsType hs_ty exp_kind
-  = do { mode <- mkMode TypeLevel
+  = do { mode <- mkTcTyMode TypeLevel
        ; tc_lhs_type mode hs_ty exp_kind }
 
 tc_lhs_type :: TcTyMode -> LHsType GhcRn -> TcKind -> TcM TcType
@@ -1630,11 +1654,11 @@ tcHsMbContext Nothing    = return []
 tcHsMbContext (Just cxt) = tcHsContext cxt
 
 tcHsContext :: LHsContext GhcRn -> TcM [PredType]
-tcHsContext cxt = do { mode <- mkMode TypeLevel
+tcHsContext cxt = do { mode <- mkTcTyMode TypeLevel
                      ; tc_hs_context mode cxt }
 
 tcLHsPredType :: LHsType GhcRn -> TcM PredType
-tcLHsPredType pred = do { mode <- mkMode TypeLevel
+tcLHsPredType pred = do { mode <- mkTcTyMode TypeLevel
                         ; tc_lhs_pred mode pred }
 
 tc_hs_context :: TcTyMode -> LHsContext GhcRn -> TcM [PredType]
@@ -1877,13 +1901,16 @@ newNamedWildTyVar _name   -- Currently ignoring the "_x" wildcard name used in t
 tcAnonWildCardOcc :: TcTyMode -> HsType GhcRn -> Kind -> TcM TcType
 tcAnonWildCardOcc (TcTyMode { mode_lvl = lvl, mode_holes = hole_mode })
                   ty exp_kind
-  = do { kv_details <- newTauTvDetailsAtLevel lvl
+    -- mode_lvl field: see Note [Checking partial type signatures]
+    -- esp the bullet on nested forall types
+  = ASSERT2( holesOK hole_mode, ppr ty )
+    do { kv_details <- newTauTvDetailsAtLevel lvl
        ; kv_name    <- newMetaTyVarName (fsLit "k")
        ; wc_details <- newTauTvDetailsAtLevel lvl
        ; wc_name    <- newMetaTyVarName (fsLit wc_nm)
        ; let kv      = mkTcTyVar kv_name liftedTypeKind kv_details
              wc_kind = mkTyVarTy kv
-       ; let wc_tv   = mkTcTyVar wc_name wc_kind wc_details
+             wc_tv   = mkTcTyVar wc_name wc_kind wc_details
 
        ; traceTc "tcAnonWildCardOcc" (ppr lvl <+> ppr emit_holes)
        ; when emit_holes $
@@ -1899,8 +1926,8 @@ tcAnonWildCardOcc (TcTyMode { mode_lvl = lvl, mode_holes = hole_mode })
   where
      -- See Note [Wildcard names]
      wc_nm = case hole_mode of
-               HM_FamPat -> "_"
                HM_Sig    -> "w"
+               HM_FamPat -> "_"
                HM_VTA    -> "w"
 
      emit_holes = case hole_mode of
@@ -1916,10 +1943,10 @@ wildcard "w", not "_".  If we use the latter, we get messages like
 which is a bit confusing.  I prefer
      Found type wildcard ‘_’ standing for ‘w0’
 
-However, on the LHS of family instances we switch hole emission
-off (see Note [Wildcards in family instances] in GHC.Rename.Module
-and tcFamTyPats above.  And for family insatnce we prefer to use "_"
-so that we can pretty-print the LHS as
+However, on the LHS of family instances we switch hole emission off
+(see Note [Wildcards in family instances] in GHC.Rename.Module) by
+using HM_FamPat in tcFamTyPats above.  And for family insatnce we
+prefer to use "_" so that we can pretty-print the LHS as
    F _ Int _ = ...
 not
    F w1 Int w2 = ...
@@ -1927,7 +1954,7 @@ There is some unsavory magic, relying on that underscore,
 in GHC.Core.Coercion.tidyCoAxBndrsForUser.
 
 So we hackily use the mode_holes flag to control the name used
-for wildcards.  Ugh.  But it works
+for wildcards.  Ugh.  But it works.
 
 Note [Wildcards in visible kind application]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -3295,7 +3322,7 @@ tcHsPartialSigType ctxt sig_ty
          , hsib_body = hs_ty } <- ib_ty
   , (explicit_hs_tvs, L _ hs_ctxt, hs_tau) <- splitLHsSigmaTyInvis hs_ty
   = addSigCtxt ctxt hs_ty $
-    do { mode <- mkMode TypeLevel
+    do { mode <- mkMode TypeLevel HM_Sig
        ; (implicit_tvs, (explicit_tvs, (wcs, wcx, theta, tau)))
             <- solveLocalEqualities "tcHsPartialSigType"    $
                tcNamedWildCardBinders sig_wcs $ \ wcs ->
@@ -3323,8 +3350,8 @@ tcHsPartialSigType ctxt sig_ty
        ; emitNamedWildCardHoleConstraints wcs
 
        -- Zonk, so that any nested foralls can "see" their occurrences
-       -- See Note [Checking partial type signatures], in
-       -- the bullet on Nested foralls.
+       -- See Note [Checking partial type signatures], and in particular
+       -- Note [Levels for wildcards]
        ; implicit_tvs <- mapM zonkTcTyVarToTyVar implicit_tvs
        ; explicit_tvs <- mapM zonkTcTyVarToTyVar explicit_tvs
        ; theta        <- mapM zonkTcType theta
@@ -3396,23 +3423,7 @@ we do the following
      g x = True
   It's really as if we'd written two distinct signatures.
 
-* Nested foralls. Consider
-     f :: forall b. (forall a. a -> _) -> b
-  We do /not/ allow the "_" to be instantiated to 'a'; but we do
-  (as before) allow it to be instantiated to the (top level) 'b'.
-  Why not?  Because suppose
-     f x = (x True, x 'c')
-  We must instantiate that (forall a. a -> _) when typechecking
-  f's body, so we must know precisely where all the a's are; they
-  must not be hidden under (filled-in) unification variables!
-
-  We achieve this:
-  - For /named/ wildcards, we create them at the outer level, and push
-    the level when we go inside a forall.  So now the unification
-    variable for the "_" can't unify with 'a'.
-  - For /anonymous/ wildcards, we float them all out in
-    floatKindEqualities, and promote them in emitFlatConstraints.
-    See Note [Failure in local type signatures] in GHC.Tc.Solver.
+* Nested foralls. See Note [Levels for wildcards]
 
 * Just as for ordinary signatures, we must zonk the type after
   kind-checking it, to ensure that all the nested forall binders can
@@ -3422,6 +3433,36 @@ we do the following
   out of the way of instantiation.  Example: #18008 had
        foo :: (forall a. (Show a => blah) |> Refl) -> _
   and that Refl cast messed things up.  See #18062.
+
+Note [Levels for wildcards]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Consider
+     f :: forall b. (forall a. a -> _) -> b
+We do /not/ allow the "_" to be instantiated to 'a'; although we do
+(as before) allow it to be instantiated to the (top level) 'b'.
+Why not?  Suppose
+   f x = (x True, x 'c')
+
+During typecking the RHS we must instantiate that (forall a. a -> _),
+so we must know /precisely/ where all the a's are; they must not be
+hidden under (possibly-not-yet-filled-in) unification variables!
+
+We achieve this as follows:
+
+- For /named/ wildcards such sas
+     g :: forall b. (forall la. a -> _x) -> b
+  there is no problem: we create them at the outer level (ie the
+  ambient level of teh signature itself), and push the level when we
+  go inside a forall.  So now the unification variable for the "_x"
+  can't unify with skolem 'a'.
+
+- For /anonymous/ wildcards, such as 'f' above, we carry the ambient
+  level of the signature to the hole in the mode_lvl field of
+  TcTyMode.  Then, in tcAnonWildCardOcc we us that level (and /not/
+  the level ambient at the occurrence of "_") to create the
+  unificaiton variable for the wildcard.  That is the sole
+  purpose of the mode_lvl field: to transport the ambient level
+  of the signature down to the anonymous wildcard occurrences.
 
 Note [Extra-constraint holes in partial type signatures]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -3597,7 +3638,7 @@ It does sort checking and desugaring at the same time, in one single pass.
 
 tcLHsKindSig :: UserTypeCtxt -> LHsKind GhcRn -> TcM Kind
 tcLHsKindSig ctxt hs_kind
-  = do { mode <- mkMode KindLevel
+  = do { mode <- mkTcTyMode KindLevel
        ; tc_lhs_kind_sig mode ctxt hs_kind }
 
 tc_lhs_kind_sig :: TcTyMode -> UserTypeCtxt -> LHsKind GhcRn -> TcM Kind

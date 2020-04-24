@@ -98,7 +98,7 @@ tcMatchesFun fn@(L _ fun_name) matches exp_ty
         ; checkArgs fun_name matches
 
         ; matchExpectedFunTys herald ctxt arity exp_ty $ \ pat_tys rhs_ty ->
-             -- NB: exp_type may be polymoprhic, but
+             -- NB: exp_type may be polymorphic, but
              --     matchExpectedFunTys can cope with that
           tcMatches match_ctxt pat_tys rhs_ty matches }
   where

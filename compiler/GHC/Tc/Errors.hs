@@ -425,7 +425,7 @@ reportImplic ctxt implic@(Implic { ic_skols = tvs
        ; reportWanteds ctxt' tc_lvl wanted
        ; when (cec_warn_redundant ctxt) $
          warnRedundantConstraints ctxt' tcl_env info' dead_givens
-       ; when bad_telescope $ reportBadTelescope ctxt tcl_env info tvs }
+       ; when bad_telescope $ reportBadTelescope ctxt' tcl_env info' tvs' }
   where
     tcl_env      = ic_env implic
     insoluble    = isInsolubleStatus status
