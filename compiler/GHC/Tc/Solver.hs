@@ -160,17 +160,19 @@ simplifyTop wanteds
 -- should generally bump the TcLevel to make sure that this run of the solver
 -- doesn't affect anything lying around.
 solveLocalEqualities :: String -> TcM a -> TcM a
+-- Note [Failure in local type signatures]
 solveLocalEqualities callsite thing_inside
   = do { (wanted, res) <- solveLocalEqualitiesX callsite thing_inside
        ; emitFlatConstraints wanted
        ; return res }
 
 emitFlatConstraints :: WantedConstraints -> TcM ()
+-- See Note [Failure in local type signatures]
 emitFlatConstraints wanted
   = do { wanted <- TcM.zonkWC wanted
        ; case floatKindEqualities wanted of
            Nothing -> do { traceTc "emitFlatConstraints: failing" (ppr wanted)
-                         ; emitConstraints wanted
+                         ; emitConstraints wanted -- So they get reported!
                          ; failM }
            Just simple_wanteds -> do { _ <- promoteTyVarSet $
                                             tyCoVarsOfCts simple_wanteds
@@ -201,10 +203,11 @@ floatKindEqualities wc = float_wc emptyVarSet wc
       = Nothing   -- A short cut /plus/ we must keep track of IC_BadTelescope
       | otherwise
       = do { cts <- float_wc new_trapping_tvs (ic_wanted imp)
-           ; unless (isEmptyBag cts || ic_no_eqs imp) $
+           ; when (not (isEmptyBag cts) && not (ic_no_eqs imp)) $
              Nothing
-                 -- Don't float out past local equalities
-                 -- C.f GHC.Tc.Solver.approximateWC
+                 -- If there are some constraints to float out, but we can't
+                 -- because we don't float out past local equalities
+                 -- (c.f GHC.Tc.Solver.approximateWC), then fail
            ; return cts }
       where
         new_trapping_tvs = trapping_tvs `extendVarSetList` ic_skols imp
@@ -215,7 +218,7 @@ floatKindEqualities wc = float_wc emptyVarSet wc
 When kind checking a type signature, we like to fail fast if we can't
 solve all the kind equality constraints: see Note [Fail fast on kind
 errors].  But what about /local/ type signatures, mentioning in-scope
-type varaibles for which there might be given equalities.  Here's
+type variables for which there might be given equalities.  Here's
 an example (T15076b):
 
   class (a ~ b) => C a b
@@ -275,7 +278,7 @@ So here's the plan:
 
 * Note that this float-and-promote step means that anonymous
   wildcards get floated to top level, as we want; see
-  Note [Checking partial type signatures] in GHC.Tc.Geh.HsType.
+  Note [Checking partial type signatures] in GHC.Tc.Gen.HsType.
 
 All this is done:
 
