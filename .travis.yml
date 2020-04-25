@@ -49,7 +49,8 @@ script:
  # do not build dynamic libraries
  - echo 'DYNAMIC_GHC_PROGRAMS = NO' >> mk/validate.mk
  - echo 'GhcLibWays = v' >> mk/validate.mk
- - if [ "$DEBUG_STAGE2" = "YES" ]; then echo 'GhcStage2HcOpts += -DDEBUG' >> mk/validate.mk; fi
+ - if [ "$DEBUG_STAGE2" = "YES" ]; then echo 'GhcStage2HcOpts += -DDEBUG' >> mk/validate.mk; fi;
+ - cabal update
  # * Use --quiet, otherwise the build log might exceed the limit of 4
  # megabytes, causing Travis to kill our job.
  # * But use VERBOSE=2 (the default, but not when using --quiet) otherwise
